@@ -35,6 +35,13 @@ MARKET_TICKER = {
     'alternative1':'_A'
     }
 SAFE_BUFFER = 1.2
+TRANSACTION_FEE = {
+    'main_buy': 0.02,
+    'alternative_buy': 0.01,
+    'alternative_sell':0.005,
+    'main_sell':0.00
+}
+TOTAL_TIME: 300
 shutdown = False
 
 # Function 1. This helper method returns the current 'tick' of the running case
@@ -46,7 +53,8 @@ def get_tick(session):
     case = resp.json()
     return case['tick']
 
-# Function 2. This function read the tender and get quantity
+# Function 2. This function gets all the active tender information from the API
+# We assume all the tender will be either accepted or waited until decline and there should only be one active tender at one time
 # TESTED
 def get_tender(session):
     try:
@@ -54,9 +62,11 @@ def get_tender(session):
         return resp.json()[0]
     except: return []
 
-# Function 3-1. Get current book order quantity and price form both markets (let's experiment with taking the first 20 orders first)
-# The order limit might have to change after in class parctice when we have human traders
-## !! when use 'bid' as key return people who want to buy; when use 'asks' as key return people who want to sell
+# Function 3-1. Get current book order quantity and price form both markets (We will experiment with taking the first 20 orders from the book, this limit can definitely be adjsuted after testing)
+# The function takes session and tender info returned from function 2 as the input
+# The function will proces the tender info and get the frist 20 book orders from both main market and alternative market in either 'bids' or 'asks' side match the tender request
+    # If the tender request is BUY, we will look at 'asks' on the book orders and vice versa
+# The function will call function 3-2 accept_decision within.
 # TESTED
 def get_book_order(session, tender_info):
     ticker = (tender_info['ticker'])
@@ -82,54 +92,84 @@ def get_book_order(session, tender_info):
         'tender_id':tender_info['tender_id']}
     return decision
 
-# Function 3-2. Taking main_book and alternative_book from function 3-1 as the input. 
-# This function will start form the first item in both books, choose the one with favorable price until: 1. reach the volume 2. the price is no longer favorable comparing to 1.2* given price
-# The function will return 2 integers representing how much we should purchase from each of the markets.
+# Function 3-2. Taking main_book, alternative_book, and tender_info from function 3-1 as the input. 
+# This function will start form the first item in both books, choose the one with favorable price until: 1. reach the volume 2. the new vwap price is no longer favorable comparing to 1.2* tender price
+# The function will return 2 integers representing how much we should purchase from each of the markets: main and alternative
 # If the function returns [0,0], means the current market condition is not favorable and we should not accept the tender. We can hold the tender and wait
+# The output will be formated as a dictionary back in Function 3-1 which includes all the necessary information to hold the tender/ accept the tender & execute two market orders in alternative and main markets
 # TO-DO: VWAP LOGIC NOT TESTED due to server error
 def accept_decision(main_book,alternative_book,tender_info):
-    m = 0
-    a = 0
-    negative_factor = 1
+
+    # This part will return the appropriate transaction fee based on order type
+    if tender_info['action'] == 'SELL':
+        main_fee = TRANSACTION_FEE['main_sell']
+        alternative_fee = TRANSACTION_FEE['alternative_sell']
+    else:
+        main_fee = TRANSACTION_FEE['main_buy']
+        alternative_fee = TRANSACTION_FEE['alternative_buy']
+
+    # This part define the price and quantity requested in tender, initialize the quantity we purchase from two markets and total price paid for vwap calculation
     given_price = tender_info['price']*SAFE_BUFFER
     given_quantity = tender_info['quantity']
     at_main = 0
     at_alternative = 0
     total_price = 0
 
+    # This part define a negative factor.
+    # When order type is BUY, negative factor is 1: we want: price_on_market_asks < offered in tender
+    # When order type is SELL, negative factor is -1: we want: price_on_market_bids > offered in tender => price_on_market_bids *-1 < offered in tender*-1
+    # Through using negative factor we can use one comparision for both buy and sell
+    negative_factor = 1
     if tender_info['action'] == 'SELL': negative_factor = -1
+
+    # Initialize index to read main_book and alternative_book orders
+    m = 0
+    a = 0
+
     while m < len(main_book) and a < len(alternative_book) and at_main + at_alternative < given_quantity:
+        
+        # This part read the order by indexs and their price after negative factor and transction fee
         main = main_book[m]
         alternative = alternative_book[a]
-        if main['price']*negative_factor <= alternative['price']*negative_factor:
+        main_price_book = main['price']*negative_factor-main_fee
+        alternative_price_book = alternative['price']*negative_factor-alternative_fee
+
+        # Compare main price and alternative price
+        if  main_price_book <= alternative_price_book:
+            # Get quantity and calculate vwap after add this volume and price
             quantity = min(main['quantity'],(given_quantity-at_main-at_alternative))
-            current_price = main['price']
-            new_vwap = (current_price*quantity+total_price)/(quantity+at_main+at_alternative)
-            if new_vwap*negative_factor > given_price*negative_factor: 
+            new_vwap = (main_price_book*quantity+total_price)/(quantity+at_main+at_alternative)
+            # If price is no longer favorable
+            if new_vwap > given_price*negative_factor: 
                 return([0,0])
+            # If price is favorable
             else:
                 at_main += quantity
-                total_price += quantity*current_price
+                total_price += quantity*main_price_book
                 m += 1
+        # Same logic as the logic for main maket
         else:
             quantity = min(alternative['quantity'],(given_quantity-at_main-at_alternative))
-            current_price = alternative['price']
-            new_vwap = (current_price*quantity+total_price)/(quantity+at_main+at_alternative)
-            if new_vwap*negative_factor > given_price*negative_factor: 
+            new_vwap = (alternative_price_book*quantity+total_price)/(quantity+at_main+at_alternative)
+            if new_vwap > given_price*negative_factor: 
                 return([0,0])
             else:
                 at_alternative += quantity
-                total_price += quantity*current_price
+                total_price += quantity*alternative_price_book
                 a += 1
+    # See if we have enough volume to cover the tender
     if at_main+at_alternative == given_quantity: return [at_main,at_alternative]
     else: return [0,0]
     
-# Function 4. This function will accpet the tender and send out market order based on the decision returned by the function 3
+# Function 4. This function takes the input from Function 3 which is a dictionary with all the needed information
+# This function will accpet the tender and send out market order based on the decision
 # TO-DO: ORDERS SEND PART NOT TESTED due to server issue
 def order_sender(decision,session):
     if decision['main_volume'] + decision['alternative_volume'] == 0: return
     tender_id = decision['tender_id']
+    # Accept the tender
     session.post(f'http://localhost:9999/v1/tenders/{tender_id}')
+    # Execute the main market orders
     session.post(f'http://localhost:9999/v1/orders', 
         params = {
             'ticker':(decision['main_ticker']), 
@@ -137,6 +177,7 @@ def order_sender(decision,session):
             'quantity':(decision['main_volume']),
             'action':(decision['tender_action'])
         })
+    # Execute alternative market orders
     session.post(f'http://localhost:9999/v1/orders', 
         params = {
             'ticker':(decision['alternative_ticker']), 
@@ -145,7 +186,7 @@ def order_sender(decision,session):
             'action':(decision['tender_action'])
         })
 
-# this is the main method containing the actual order routing logic
+# This is the main method containing the actual order routing logic
 # TO-DO: OVERALL PERFORMANCE NOT TESTED due to server issue
 # TO-DO: TEST NEED when we have multiple human traders
 # TO-DO: NEED to adjuste maximum book order request limits + price safer buffer based on real performance
@@ -157,12 +198,12 @@ def main():
         # get the current time of the case
         tick = get_tick(s)
 
-        # while the time is <= 300
-        while tick <= 300:
+        # while the time is <= total_time
+        while tick <= TOTAL_TIME:
             # get current tender
             tender_info = get_tender(s)
             
-            # if there is a valid tendr, get the book_order
+            # if there is a valid tender, get the book_order and run order_sender
             if tender_info != []:
                 decision = get_book_order(s, tender_info)
                 order_sender(decision, s)
