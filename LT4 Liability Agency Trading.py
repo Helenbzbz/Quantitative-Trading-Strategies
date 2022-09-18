@@ -68,7 +68,16 @@ def get_book_order(session, tender_info):
     else:
         main_book = (main_resp.json()['bids'])
         alternative_book = (alternative_resp.json()['bids'])
-    accept_decision(main_book, alternative_book, tender_info) 
+
+    volume = accept_decision(main_book, alternative_book, tender_info)
+    decision = {
+        'main_ticker':main_ticker,
+        'main_volume': volume[0],
+        'alternative_ticker':alternative_ticker,
+        'alternative_volume':volume[1],
+        'tender_action': tender_action,
+        'tender_id':tender_info['tender_id']}
+    return decision
 
 # Function 3-2. Taking main_book and alternative_book from function 3-1 as the input. 
 # This function will start form the first item in both books, choose the one with favorable price until: 1. reach the volume 2. the price is no longer favorable comparing to 1.2* given price
@@ -88,16 +97,36 @@ def accept_decision(main_book,alternative_book,tender_info):
         main = main_book[m]
         alternative = alternative_book[a]
         if main['price']*negative_factor <= alternative['price']*negative_factor:
-            if main['price']*negative_factor > given_price*negative_factor: print([0,0])
+            if main['price']*negative_factor > given_price*negative_factor: return([0,0])
             at_main += min(main['quantity'],(given_quantity-at_main-at_alternative))
             m += 1
         else:
-            if alternative['price']*negative_factor > given_price*negative_factor: print([0,0])
+            if alternative['price']*negative_factor > given_price*negative_factor: return([0,0])
             at_alternative += min(alternative['quantity'],(given_quantity-at_main-at_alternative))
             a += 1
     if at_main+at_alternative == given_quantity: return [at_main,at_alternative]
     else: return [0,0]
     
+# Function 4. This function will accpet the tender and send out market order based on the decision returned by the function 3
+def order_sender(decision,session):
+    if decision['main_volume'] + decision['alternative_volume'] == 0: return
+    tender_id = decision['tender_id']
+    session.post(f'http://localhost:9999/v1/tenders/{tender_id}')
+    session.post(f'http://localhost:9999/v1/orders', 
+        params = {
+            'ticker':(decision['main_ticker']), 
+            'type':'MARKET', 
+            'quantity':(decision['main_volume']),
+            'action':(decision['tender_action'])
+        })
+    session.post(f'http://localhost:9999/v1/orders', 
+        params = {
+            'ticker':(decision['alternative_ticker']), 
+            'type':'MARKET', 
+            'quantity':(decision['alternative_volume']),
+            'action':(decision['tender_action'])
+        })
+
 # this is the main method containing the actual order routing logic
 def main():
     # creates a session to manage connections and requests to the RIT Client
@@ -114,8 +143,8 @@ def main():
             
             # if there is a valid tendr, get the book_order
             if tender_info != []:
-                get_book_order(s, tender_info)
-                break
+                decision = get_book_order(s, tender_info)
+                order_sender(decision, s)
 
             # refresh the case time. THIS IS IMPORTANT FOR THE WHILE LOOP
             tick = get_tick(s)
