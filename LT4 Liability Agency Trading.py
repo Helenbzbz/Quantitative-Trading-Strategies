@@ -91,19 +91,32 @@ def accept_decision(main_book,alternative_book,tender_info):
     given_quantity = tender_info['quantity']
     at_main = 0
     at_alternative = 0
+    total_price = 0
 
     if tender_info['action'] == 'SELL': negative_factor = -1
     while m < len(main_book) and a < len(alternative_book) and at_main + at_alternative < given_quantity:
         main = main_book[m]
         alternative = alternative_book[a]
         if main['price']*negative_factor <= alternative['price']*negative_factor:
-            if main['price']*negative_factor > given_price*negative_factor: return([0,0])
-            at_main += min(main['quantity'],(given_quantity-at_main-at_alternative))
-            m += 1
+            quantity = min(main['quantity'],(given_quantity-at_main-at_alternative))
+            current_price = main['price']
+            new_vwap = (current_price*quantity+total_price)/(quantity+at_main+at_alternative)
+            if new_vwap*negative_factor > given_price*negative_factor: 
+                return([0,0])
+            else:
+                at_main += quantity
+                total_price += quantity*current_price
+                m += 1
         else:
-            if alternative['price']*negative_factor > given_price*negative_factor: return([0,0])
-            at_alternative += min(alternative['quantity'],(given_quantity-at_main-at_alternative))
-            a += 1
+            quantity = min(alternative['quantity'],(given_quantity-at_main-at_alternative))
+            current_price = alternative['price']
+            new_vwap = (current_price*quantity+total_price)/(quantity+at_main+at_alternative)
+            if new_vwap*negative_factor > given_price*negative_factor: 
+                return([0,0])
+            else:
+                at_alternative += quantity
+                total_price += quantity*current_price
+                a += 1
     if at_main+at_alternative == given_quantity: return [at_main,at_alternative]
     else: return [0,0]
     
