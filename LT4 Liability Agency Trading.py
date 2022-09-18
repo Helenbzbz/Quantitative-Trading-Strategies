@@ -38,6 +38,7 @@ SAFE_BUFFER = 1.2
 shutdown = False
 
 # Function 1. This helper method returns the current 'tick' of the running case
+# TESTED
 def get_tick(session):
     resp = session.get('http://localhost:9999/v1/case')
     if resp.status_code == 401:
@@ -46,6 +47,7 @@ def get_tick(session):
     return case['tick']
 
 # Function 2. This function read the tender and get quantity
+# TESTED
 def get_tender(session):
     try:
         resp = session.get('http://localhost:9999/v1/tenders')
@@ -55,6 +57,7 @@ def get_tender(session):
 # Function 3-1. Get current book order quantity and price form both markets (let's experiment with taking the first 20 orders first)
 # The order limit might have to change after in class parctice when we have human traders
 ## !! when use 'bid' as key return people who want to buy; when use 'asks' as key return people who want to sell
+# TESTED
 def get_book_order(session, tender_info):
     ticker = (tender_info['ticker'])
     main_ticker = ticker[0:4]+MARKET_TICKER['main']
@@ -83,6 +86,7 @@ def get_book_order(session, tender_info):
 # This function will start form the first item in both books, choose the one with favorable price until: 1. reach the volume 2. the price is no longer favorable comparing to 1.2* given price
 # The function will return 2 integers representing how much we should purchase from each of the markets.
 # If the function returns [0,0], means the current market condition is not favorable and we should not accept the tender. We can hold the tender and wait
+# TO-DO: VWAP LOGIC NOT TESTED due to server error
 def accept_decision(main_book,alternative_book,tender_info):
     m = 0
     a = 0
@@ -121,6 +125,7 @@ def accept_decision(main_book,alternative_book,tender_info):
     else: return [0,0]
     
 # Function 4. This function will accpet the tender and send out market order based on the decision returned by the function 3
+# TO-DO: ORDERS SEND PART NOT TESTED due to server issue
 def order_sender(decision,session):
     if decision['main_volume'] + decision['alternative_volume'] == 0: return
     tender_id = decision['tender_id']
@@ -141,6 +146,9 @@ def order_sender(decision,session):
         })
 
 # this is the main method containing the actual order routing logic
+# TO-DO: OVERALL PERFORMANCE NOT TESTED due to server issue
+# TO-DO: TEST NEED when we have multiple human traders
+# TO-DO: NEED to adjuste maximum book order request limits + price safer buffer based on real performance
 def main():
     # creates a session to manage connections and requests to the RIT Client
     with requests.Session() as s:
