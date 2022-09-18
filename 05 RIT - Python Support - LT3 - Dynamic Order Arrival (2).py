@@ -16,7 +16,7 @@ def signal_handler(signum, frame):
     shutdown = True
 
 # set your API key to authenticate to the RIT client
-API_KEY = {'X-API-Key': 'YOUR API KEY HERE'}
+API_KEY = {'X-API-Key': '837E5K0H'}
 shutdown = False
 
 # this helper method returns the current 'tick' of the running case
@@ -29,8 +29,8 @@ def get_tick(session):
 
 # this helper method builds the depth view for two tickers
 def depth_view(session):
-    crzy_resp = session.get('http://localhost:9999/v1/securities/book?ticker=CRZY')
-    tame_resp = session.get('http://localhost:9999/v1/securities/book?ticker=TAME')
+    crzy_resp = session.get('http://localhost:9999/v1/securities/book?ticker=CRZY_M')
+    tame_resp = session.get('http://localhost:9999/v1/securities/book?ticker=TAME_M')
     if crzy_resp.status_code == 401 or tame_resp.status_code == 401:
         raise ApiException('The API key provided in this Python code must match that in the RIT client (please refer to the API hyperlink in the client toolbar and/or the RIT – User Guide – REST API Documentation.pdf)')
     crzy_book = crzy_resp.json()
