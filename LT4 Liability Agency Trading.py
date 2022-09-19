@@ -41,7 +41,7 @@ TRANSACTION_FEE = {
     'alternative_sell':0.005,
     'main_sell':0.00
 }
-TOTAL_TIME: 300
+TOTAL_TIME= 300
 shutdown = False
 
 # Function 1. This helper method returns the current 'tick' of the running case
@@ -206,6 +206,7 @@ def main():
             # if there is a valid tender, get the book_order and run order_sender
             if tender_info != []:
                 decision = get_book_order(s, tender_info)
+                print(decision)
                 order_sender(decision, s)
 
             # refresh the case time. THIS IS IMPORTANT FOR THE WHILE LOOP
