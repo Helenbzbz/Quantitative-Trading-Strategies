@@ -97,7 +97,6 @@ def get_book_order(session, tender_info):
 # The function will return 2 integers representing how much we should purchase from each of the markets: main and alternative
 # If the function returns [0,0], means the current market condition is not favorable and we should not accept the tender. We can hold the tender and wait
 # The output will be formated as a dictionary back in Function 3-1 which includes all the necessary information to hold the tender/ accept the tender & execute two market orders in alternative and main markets
-# TO-DO: VWAP LOGIC NOT TESTED due to server error
 def accept_decision(main_book,alternative_book,tender_info):
 
     # This part will return the appropriate transaction fee based on order type
@@ -185,7 +184,7 @@ def order_sender(decision,session):
             'type':'MARKET', 
             'quantity':(decision['alternative_volume']),
             'action':(decision['tender_action'])}
-    session.post(f'http://localhost:9999/v1/orders', params = alter_params)
+    resp = session.post(f'http://localhost:9999/v1/orders', params = alter_params)
     if resp.ok:
         print('The market buy order was submitted and for alternative market')
 
