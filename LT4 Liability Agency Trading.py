@@ -59,7 +59,7 @@ def get_tick(session):
 def get_tender(session):
     try:
         resp = session.get('http://localhost:9999/v1/tenders')
-        return resp.json()[0]
+        return (resp.json()[0])
     except: return []
 
 # Function 3-1. Get current book order quantity and price form both markets (We will experiment with taking the first 20 orders from the book, this limit can definitely be adjsuted after testing)
@@ -75,7 +75,7 @@ def get_book_order(session, tender_info):
     main_resp = session.get(f'http://localhost:9999/v1/securities/book?ticker={main_ticker}')
     alternative_resp = session.get(f'http://localhost:9999/v1/securities/book?ticker={alternative_ticker}')
     tender_action = tender_info['action']
-    if tender_action == 'BUY':
+    if tender_action == 'SELL':
         main_book = (main_resp.json()['asks'])
         alternative_book = (alternative_resp.json()['asks'])
     else:
@@ -83,6 +83,8 @@ def get_book_order(session, tender_info):
         alternative_book = (alternative_resp.json()['bids'])
 
     volume = accept_decision(main_book, alternative_book, tender_info)
+    if tender_action == 'BUY': tender_action = 'SELL'
+    else: tender_action = 'BUY'
     decision = {
         'main_ticker':main_ticker,
         'main_volume': volume[0],
@@ -100,7 +102,7 @@ def get_book_order(session, tender_info):
 def accept_decision(main_book,alternative_book,tender_info):
 
     # This part will return the appropriate transaction fee based on order type
-    if tender_info['action'] == 'SELL':
+    if tender_info['action'] == 'BUY':
         main_fee = TRANSACTION_FEE['main_sell']
         alternative_fee = TRANSACTION_FEE['alternative_sell']
     else:
@@ -119,7 +121,7 @@ def accept_decision(main_book,alternative_book,tender_info):
     # When order type is SELL, negative factor is -1: we want: price_on_market_bids > offered in tender => price_on_market_bids *-1 < offered in tender*-1
     # Through using negative factor we can use one comparision for both buy and sell
     negative_factor = 1
-    if tender_info['action'] == 'SELL': negative_factor = -1
+    if tender_info['action'] == 'BUY': negative_factor = -1
 
     # Initialize index to read main_book and alternative_book orders
     m = 0
@@ -162,7 +164,7 @@ def accept_decision(main_book,alternative_book,tender_info):
     
 # Function 4. This function takes the input from Function 3 which is a dictionary with all the needed information
 # This function will accpet the tender and send out market order based on the decision
-# TO-DO: ORDERS SEND PART NOT TESTED due to server issue
+# TO-DO: For Some reason, tender command works while the order commands does not
 def order_sender(decision,session):
     if decision['main_volume'] + decision['alternative_volume'] == 0: return
     tender_id = decision['tender_id']
@@ -174,9 +176,8 @@ def order_sender(decision,session):
             'type':'MARKET', 
             'quantity':(decision['main_volume']),
             'action':(decision['tender_action'])}
-    resp = session.post(f'http://localhost:9999/v1/orders', params=main_params)
-    if resp.ok:
-        print('The market buy order was submitted and for main market')
+    resp = session.post('http://localhost:9999/v1/orders', params=main_params)
+    print(main_params)
 
     # Execute alternative market orders
     alter_params = {
@@ -184,10 +185,9 @@ def order_sender(decision,session):
             'type':'MARKET', 
             'quantity':(decision['alternative_volume']),
             'action':(decision['tender_action'])}
-    resp = session.post(f'http://localhost:9999/v1/orders', params = alter_params)
-    if resp.ok:
-        print('The market buy order was submitted and for alternative market')
-
+    resp = session.post('http://localhost:9999/v1/orders', params=alter_params)
+    print(alter_params)
+    
 # This is the main method containing the actual order routing logic
 # TO-DO: OVERALL PERFORMANCE NOT TESTED due to server issue
 # TO-DO: TEST NEED when we have multiple human traders
@@ -205,7 +205,7 @@ def main():
             # get current tender
             tender_info = get_tender(s)
             
-            # if there is a valid tender, get the book_order and run order_sender
+            #if there is a valid tender, get the book_order and run order_sender
             if tender_info != []:
                 decision = get_book_order(s, tender_info)
                 order_sender(decision, s)
