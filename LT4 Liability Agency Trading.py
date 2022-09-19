@@ -169,33 +169,25 @@ def order_sender(decision,session):
     tender_id = decision['tender_id']
     # Accept the tender
     session.post(f'http://localhost:9999/v1/tenders/{tender_id}')
+
     # Execute the main market orders
     main_params = {'ticker':(decision['main_ticker']), 
             'type':'MARKET', 
             'quantity':(decision['main_volume']),
             'action':(decision['tender_action'])}
-    print(main_params)
-    # session.post(f'http://localhost:9999/v1/orders', 
-    #     params = {
-    #         'ticker':(decision['main_ticker']), 
-    #         'type':'MARKET', 
-    #         'quantity':(decision['main_volume']),
-    #         'action':(decision['tender_action'])
-    #     })
+    resp = session.post(f'http://localhost:9999/v1/orders', params=main_params)
+    if resp.ok:
+        print('The market buy order was submitted and for main market')
+
     # Execute alternative market orders
     alter_params = {
             'ticker':(decision['alternative_ticker']), 
             'type':'MARKET', 
             'quantity':(decision['alternative_volume']),
             'action':(decision['tender_action'])}
-    print(alter_params)
-    # session.post(f'http://localhost:9999/v1/orders', 
-    #     params = {
-    #         'ticker':(decision['alternative_ticker']), 
-    #         'type':'MARKET', 
-    #         'quantity':(decision['alternative_volume']),
-    #         'action':(decision['tender_action'])
-    #     })
+    session.post(f'http://localhost:9999/v1/orders', params = alter_params)
+    if resp.ok:
+        print('The market buy order was submitted and for alternative market')
 
 # This is the main method containing the actual order routing logic
 # TO-DO: OVERALL PERFORMANCE NOT TESTED due to server issue
