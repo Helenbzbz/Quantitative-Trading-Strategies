@@ -170,21 +170,32 @@ def order_sender(decision,session):
     # Accept the tender
     session.post(f'http://localhost:9999/v1/tenders/{tender_id}')
     # Execute the main market orders
-    session.post(f'http://localhost:9999/v1/orders', 
-        params = {
-            'ticker':(decision['main_ticker']), 
+    main_params = {'ticker':(decision['main_ticker']), 
             'type':'MARKET', 
             'quantity':(decision['main_volume']),
-            'action':(decision['tender_action'])
-        })
+            'action':(decision['tender_action'])}
+    print(main_params)
+    # session.post(f'http://localhost:9999/v1/orders', 
+    #     params = {
+    #         'ticker':(decision['main_ticker']), 
+    #         'type':'MARKET', 
+    #         'quantity':(decision['main_volume']),
+    #         'action':(decision['tender_action'])
+    #     })
     # Execute alternative market orders
-    session.post(f'http://localhost:9999/v1/orders', 
-        params = {
+    alter_params = {
             'ticker':(decision['alternative_ticker']), 
             'type':'MARKET', 
             'quantity':(decision['alternative_volume']),
-            'action':(decision['tender_action'])
-        })
+            'action':(decision['tender_action'])}
+    print(alter_params)
+    # session.post(f'http://localhost:9999/v1/orders', 
+    #     params = {
+    #         'ticker':(decision['alternative_ticker']), 
+    #         'type':'MARKET', 
+    #         'quantity':(decision['alternative_volume']),
+    #         'action':(decision['tender_action'])
+    #     })
 
 # This is the main method containing the actual order routing logic
 # TO-DO: OVERALL PERFORMANCE NOT TESTED due to server issue
@@ -206,7 +217,6 @@ def main():
             # if there is a valid tender, get the book_order and run order_sender
             if tender_info != []:
                 decision = get_book_order(s, tender_info)
-                print(decision)
                 order_sender(decision, s)
 
             # refresh the case time. THIS IS IMPORTANT FOR THE WHILE LOOP
