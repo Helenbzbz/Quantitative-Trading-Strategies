@@ -172,19 +172,29 @@ def order_sender(decision,session):
     session.post(f'http://localhost:9999/v1/tenders/{tender_id}')
 
     # Execute the main market orders
-    main_params = {'ticker':(decision['main_ticker']), 
+    main_volume = decision['main_volume']
+    while main_volume > 0:
+        execution_volume = min(10000,main_volume)
+        main_volume -= execution_volume
+        main_params = {'ticker':(decision['main_ticker']), 
             'type':'MARKET', 
-            'quantity':(decision['main_volume']),
+            'quantity':execution_volume,
             'action':(decision['tender_action'])}
-    session.post('http://localhost:9999/v1/orders', params=main_params)
+        resp = session.post('http://localhost:9999/v1/orders', params=main_params)
+        if resp.ok: print(main_params)
 
     # Execute alternative market orders
-    alter_params = {
+    alter_volume = decision['alternative_volume']
+    while alter_volume > 0:
+        execution_volume = min(10000,alter_volume)
+        alter_volume -= execution_volume
+        alter_params = {
             'ticker':(decision['alternative_ticker']), 
             'type':'MARKET', 
-            'quantity':(decision['alternative_volume']),
+            'quantity':execution_volume,
             'action':(decision['tender_action'])}
-    session.post('http://localhost:9999/v1/orders', params=alter_params)
+        session.post('http://localhost:9999/v1/orders', params=alter_params)
+        if resp.ok: print(alter_params)
     
 # This is the main method containing the actual order routing logic
 # TO-DO: OVERALL PERFORMANCE NOT TESTED due to server issue
