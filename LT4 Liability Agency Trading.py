@@ -227,3 +227,17 @@ def main():
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
     main()
+
+    
+## Notes from class Sep/20/2022
+# TO-DO Consider these to improve the algo :) But first make sure the most basic algo does not break
+# Long-Term: The client server follows a normal distribution and the volatility captures how volatile the stocks are -> how wide the distribution is
+    # Layer strategy, cancel the top one if you are the only one who has top
+# Short-term: In each tick, price can be bouncing around -> big market order and limit order. In this case, limit order makes more sense. No trend we should worry about
+# Consider tender spread and tender frequency, number of tenders
+# Correlation b/w stocks
+
+# Visualzie price tick
+# volatility = volatility of the week/N^0.5 => take the original price and predict the price range by volatility per one tick * sqrt(N)
+# So instead of the safe buffer index, predict the worst case on 95% significant level as the given price to analyze; Default, crazy volatility is 7% & Tame volatility is also fixed
+# Consider the threshold -> how long does it take to unwind
