@@ -176,8 +176,7 @@ def order_sender(decision,session):
             'type':'MARKET', 
             'quantity':(decision['main_volume']),
             'action':(decision['tender_action'])}
-    resp = session.post('http://localhost:9999/v1/orders', params=main_params)
-    print(main_params)
+    session.post('http://localhost:9999/v1/orders', params=main_params)
 
     # Execute alternative market orders
     alter_params = {
@@ -185,8 +184,7 @@ def order_sender(decision,session):
             'type':'MARKET', 
             'quantity':(decision['alternative_volume']),
             'action':(decision['tender_action'])}
-    resp = session.post('http://localhost:9999/v1/orders', params=alter_params)
-    print(alter_params)
+    session.post('http://localhost:9999/v1/orders', params=alter_params)
     
 # This is the main method containing the actual order routing logic
 # TO-DO: OVERALL PERFORMANCE NOT TESTED due to server issue
