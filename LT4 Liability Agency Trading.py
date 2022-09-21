@@ -34,7 +34,7 @@ MARKET_TICKER = {
     'main':'_M',
     'alternative1':'_A'
     }
-SAFE_BUFFER = 1.2
+SAFE_BUFFER = 1.1
 TRANSACTION_FEE = {
     'main_buy': 0.02,
     'alternative_buy': 0.01,
@@ -59,7 +59,7 @@ def get_tick(session):
 def get_tender(session):
     try:
         resp = session.get('http://localhost:9999/v1/tenders')
-        return (resp.json()[0])
+        return resp.json()[0]
     except: return []
 
 # Function 3-1. Get current book order quantity and price form both markets (We will experiment with taking the first 20 orders from the book, this limit can definitely be adjsuted after testing)
@@ -75,7 +75,7 @@ def get_book_order(session, tender_info):
     main_resp = session.get(f'http://localhost:9999/v1/securities/book?ticker={main_ticker}')
     alternative_resp = session.get(f'http://localhost:9999/v1/securities/book?ticker={alternative_ticker}')
     tender_action = tender_info['action']
-    if tender_action == 'SELL':
+    if tender_action == 'BUY':
         main_book = (main_resp.json()['asks'])
         alternative_book = (alternative_resp.json()['asks'])
     else:
@@ -83,8 +83,6 @@ def get_book_order(session, tender_info):
         alternative_book = (alternative_resp.json()['bids'])
 
     volume = accept_decision(main_book, alternative_book, tender_info)
-    if tender_action == 'BUY': tender_action = 'SELL'
-    else: tender_action = 'BUY'
     decision = {
         'main_ticker':main_ticker,
         'main_volume': volume[0],
@@ -99,10 +97,11 @@ def get_book_order(session, tender_info):
 # The function will return 2 integers representing how much we should purchase from each of the markets: main and alternative
 # If the function returns [0,0], means the current market condition is not favorable and we should not accept the tender. We can hold the tender and wait
 # The output will be formated as a dictionary back in Function 3-1 which includes all the necessary information to hold the tender/ accept the tender & execute two market orders in alternative and main markets
+# TO-DO: VWAP LOGIC NOT TESTED due to server error
 def accept_decision(main_book,alternative_book,tender_info):
 
     # This part will return the appropriate transaction fee based on order type
-    if tender_info['action'] == 'BUY':
+    if tender_info['action'] == 'SELL':
         main_fee = TRANSACTION_FEE['main_sell']
         alternative_fee = TRANSACTION_FEE['alternative_sell']
     else:
@@ -121,7 +120,7 @@ def accept_decision(main_book,alternative_book,tender_info):
     # When order type is SELL, negative factor is -1: we want: price_on_market_bids > offered in tender => price_on_market_bids *-1 < offered in tender*-1
     # Through using negative factor we can use one comparision for both buy and sell
     negative_factor = 1
-    if tender_info['action'] == 'BUY': negative_factor = -1
+    if tender_info['action'] == 'SELL': negative_factor = -1
 
     # Initialize index to read main_book and alternative_book orders
     m = 0
@@ -164,40 +163,29 @@ def accept_decision(main_book,alternative_book,tender_info):
     
 # Function 4. This function takes the input from Function 3 which is a dictionary with all the needed information
 # This function will accpet the tender and send out market order based on the decision
-# TO-DO: For Some reason, tender command works while the order commands does not
+# TO-DO: ORDERS SEND PART NOT TESTED due to server issue
 def order_sender(decision,session):
     if decision['main_volume'] + decision['alternative_volume'] == 0: return
     tender_id = decision['tender_id']
     # Accept the tender
     session.post(f'http://localhost:9999/v1/tenders/{tender_id}')
-
-    # Execute the main market orders
-    main_volume = decision['main_volume']
-    print(main_volume)
-    # while main_volume > 0:
-    #     execution_volume = min(10000,main_volume)
-    #     main_volume -= execution_volume
-    #     main_params = {'ticker':(decision['main_ticker']), 
+    # # Execute the main market orders
+    # session.post(f'http://localhost:9999/v1/orders', 
+    #     params = {
+    #         'ticker':(decision['main_ticker']), 
     #         'type':'MARKET', 
-    #         'quantity':execution_volume,
-    #         'action':(decision['tender_action'])}
-    #     resp = session.post('http://localhost:9999/v1/orders', params=main_params)
-    #     if resp.ok: print(main_params)
-
+    #         'quantity':(decision['main_volume']),
+    #         'action':(decision['tender_action'])
+    #     })
     # # Execute alternative market orders
-    alter_volume = decision['alternative_volume']
-    print(alter_volume)
-    # while alter_volume > 0:
-    #     execution_volume = min(10000,alter_volume)
-    #     alter_volume -= execution_volume
-    #     alter_params = {
+    # session.post(f'http://localhost:9999/v1/orders', 
+    #     params = {
     #         'ticker':(decision['alternative_ticker']), 
     #         'type':'MARKET', 
-    #         'quantity':execution_volume,
-    #         'action':(decision['tender_action'])}
-    #     session.post('http://localhost:9999/v1/orders', params=alter_params)
-    #     if resp.ok: print(alter_params)
-    
+    #         'quantity':(decision['alternative_volume']),
+    #         'action':(decision['tender_action'])
+    #     })
+
 # This is the main method containing the actual order routing logic
 # TO-DO: OVERALL PERFORMANCE NOT TESTED due to server issue
 # TO-DO: TEST NEED when we have multiple human traders
@@ -215,7 +203,7 @@ def main():
             # get current tender
             tender_info = get_tender(s)
             
-            #if there is a valid tender, get the book_order and run order_sender
+            # if there is a valid tender, get the book_order and run order_sender
             if tender_info != []:
                 decision = get_book_order(s, tender_info)
                 order_sender(decision, s)
