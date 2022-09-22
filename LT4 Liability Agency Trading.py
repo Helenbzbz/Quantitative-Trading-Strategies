@@ -83,7 +83,7 @@ def get_book_order(session, tender_info):
         alternative_book = (alternative_resp.json()['bids'])
 
     volume = accept_decision(main_book, alternative_book, tender_info)
-    if tender_action['is_fixed_bid']:
+    if tender_info['is_fixed_bid']:
         decision = {
             'main_ticker':main_ticker,
             'main_volume': volume[0],
