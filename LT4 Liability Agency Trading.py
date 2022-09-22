@@ -83,14 +83,16 @@ def get_book_order(session, tender_info):
         alternative_book = (alternative_resp.json()['bids'])
 
     volume = accept_decision(main_book, alternative_book, tender_info)
-    decision = {
-        'main_ticker':main_ticker,
-        'main_volume': volume[0],
-        'alternative_ticker':alternative_ticker,
-        'alternative_volume':volume[1],
-        'tender_action': tender_action,
-        'tender_id':tender_info['tender_id']}
-    return decision
+    if tender_action['is_fixed_bid']:
+        decision = {
+            'main_ticker':main_ticker,
+            'main_volume': volume[0],
+            'alternative_ticker':alternative_ticker,
+            'alternative_volume':volume[1],
+            'tender_action': tender_action,
+            'tender_id':tender_info['tender_id']}
+        return decision
+    else: return volume
 
 # Function 3-2. Taking main_book, alternative_book, and tender_info from function 3-1 as the input. 
 # This function will start form the first item in both books, choose the one with favorable price until: 1. reach the volume 2. the new vwap price is no longer favorable comparing to 1.2* tender price
@@ -139,26 +141,20 @@ def accept_decision(main_book,alternative_book,tender_info):
             # Get quantity and calculate vwap after add this volume and price
             quantity = min(main['quantity'],(given_quantity-at_main-at_alternative))
             new_vwap = (main_price_book*quantity+total_price)/(quantity+at_main+at_alternative)
-            # If price is no longer favorable
-            if new_vwap > given_price*negative_factor: 
-                return([0,0])
-            # If price is favorable
-            else:
-                at_main += quantity
-                total_price += quantity*main_price_book
-                m += 1
+            at_main += quantity
+            total_price += quantity*main_price_book
+            m += 1
         # Same logic as the logic for main maket
         else:
             quantity = min(alternative['quantity'],(given_quantity-at_main-at_alternative))
             new_vwap = (alternative_price_book*quantity+total_price)/(quantity+at_main+at_alternative)
-            if new_vwap > given_price*negative_factor: 
-                return([0,0])
-            else:
-                at_alternative += quantity
-                total_price += quantity*alternative_price_book
-                a += 1
+            at_alternative += quantity
+            total_price += quantity*alternative_price_book
+            a += 1
     # See if we have enough volume to cover the tender
-    if at_main+at_alternative == given_quantity: return [at_main,at_alternative]
+    if new_vwap < given_price*negative_factor: 
+        if tender_info['is_fixed_bid']: return [at_main,at_alternative]
+        else: return new_vwap
     else: return [0,0]
     
 # Function 4. This function takes the input from Function 3 which is a dictionary with all the needed information
@@ -169,22 +165,6 @@ def order_sender(decision,session):
     tender_id = decision['tender_id']
     # Accept the tender
     session.post(f'http://localhost:9999/v1/tenders/{tender_id}')
-    # # Execute the main market orders
-    # session.post(f'http://localhost:9999/v1/orders', 
-    #     params = {
-    #         'ticker':(decision['main_ticker']), 
-    #         'type':'MARKET', 
-    #         'quantity':(decision['main_volume']),
-    #         'action':(decision['tender_action'])
-    #     })
-    # # Execute alternative market orders
-    # session.post(f'http://localhost:9999/v1/orders', 
-    #     params = {
-    #         'ticker':(decision['alternative_ticker']), 
-    #         'type':'MARKET', 
-    #         'quantity':(decision['alternative_volume']),
-    #         'action':(decision['tender_action'])
-    #     })
 
 # This is the main method containing the actual order routing logic
 # TO-DO: OVERALL PERFORMANCE NOT TESTED due to server issue
@@ -206,8 +186,10 @@ def main():
             # if there is a valid tender, get the book_order and run order_sender
             if tender_info != []:
                 decision = get_book_order(s, tender_info)
-                order_sender(decision, s)
-
+                if tender_info['is_fixed_bid']:
+                    order_sender(decision, s)
+                else: print(decision)
+            
             # refresh the case time. THIS IS IMPORTANT FOR THE WHILE LOOP
             tick = get_tick(s)
 
