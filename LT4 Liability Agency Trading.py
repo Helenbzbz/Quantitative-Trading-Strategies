@@ -211,3 +211,6 @@ if __name__ == '__main__':
 # volatility = volatility of the week/N^0.5 => take the original price and predict the price range by volatility per one tick * sqrt(N)
 # So instead of the safe buffer index, predict the worst case on 95% significant level as the given price to analyze; Default, crazy volatility is 7% & Tame volatility is also fixed
 # Consider the threshold -> how long does it take to unwind
+
+
+# For iteration 8, we want to write a version for only one market
