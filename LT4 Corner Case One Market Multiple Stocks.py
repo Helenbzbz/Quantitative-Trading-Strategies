@@ -1,0 +1,1 @@
+# Accept multiple stocks but only one market
