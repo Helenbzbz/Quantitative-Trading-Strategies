@@ -3,7 +3,8 @@ import requests
 from time import sleep
 from time import time
 
-## LOGIC TESTED, ENTIRE CODE NOT TESTED as API FUNCTION IS NOT ENABLED
+## LOGIC TESTED, NEED TO TEST ITS PERFORMANCE WITH HUMAN TRADERS
+
 ## I will set the arbitrage trading logic as following:
 # We will define two global variables, Volume to count and Volume to Trade. And if we find on both bids and asks side, when we count to volume to count, the price is still favorable, we will submit order in quantity of volume to trade.
 # Besides all the basic functions, the codes wil have the following functions:
@@ -14,7 +15,7 @@ from time import time
 # main():
     # If bid_price at volume to count at market 1 is higher than the ask at market 2, we will submit a buy limit order at the market 2 and sell in market 1
     # We will set the price in a price mixture ratio of highest bids/lowest asks + price at volume to count
-    # After experiment
+    # After experiment, It's better to submit market order as soon as the gap is identified, I Tried ratio of 0.5 and 0.8, more than 40% of limit orders eventually are not fullfilled
     # stopper => (After Experiment, don't sleep work the best as soon as the volume is small enough)
         # I left the function here for future potential use
         # We will set another global variable called bids allowed in one second
