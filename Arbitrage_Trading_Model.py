@@ -14,7 +14,9 @@ from time import time
 # main():
     # If bid_price at volume to count at market 1 is higher than the ask at market 2, we will submit a buy limit order at the market 2 and sell in market 1
     # We will set the price in a price mixture ratio of highest bids/lowest asks + price at volume to count
-    # stopper:
+    # After experiment
+    # stopper => (After Experiment, don't sleep work the best as soon as the volume is small enough)
+        # I left the function here for future potential use
         # We will set another global variable called bids allowed in one second
         # This stopper will take the above global variable and slow down the speed of order submitting
         # We will put the code to sleep after every judgement no matter a bid submitted or not
@@ -22,9 +24,16 @@ from time import time
 # GLOBAL VARIABLE
 API_KEY = {'X-API-Key': '837E5K0H'}
 shutdown = False
-VOLUME_COUNT = 5000
-VOLUME_SUBMIT = 1000
-PRICE_RATIO = 0.8 # The weight highst bid/lowest ask should take
+VOLUME_COUNT = 7000
+VOLUME_SUBMIT = 5000
+# Notes, When 10000 & 5000 => 65,281
+# When 20000 & 10000 => 76,026
+# When 18000 & 10000 => 78,091
+# When 16000 & 10000 => 87,285
+# When 14000 & 10000 => 102,163
+# When 7000 & 5000 => 116,241/ 120,581 (Most ideal combination)
+# When 5000 & 1000 => 57,041
+PRICE_RATIO = 0.5 # The weight highst bid/lowest ask should take
 BIDS_IN_1 = 2 # We are allowed to submit this number of orders per second
 MARKET1 = 'CRZY_M'
 MARKET2 = 'CRZY_A'
@@ -87,22 +96,22 @@ def main():
             highest_bid2, bid_count2, lowest_ask2, ask_count2 = ticker_bid_ask(s, MARKET2)
 
             if bid_count1 > ask_count2:
-                ask_price2 = PRICE_RATIO*lowest_ask2+(1-PRICE_RATIO)*ask_count2
-                bid_price1 = PRICE_RATIO*highest_bid1+(1-PRICE_RATIO)*bid_count1
-                s.post('http://localhost:9999/v1/orders', params={'ticker': MARKET2, 'type': 'LIMIT', 'quantity': VOLUME_SUBMIT, 'price':ask_price2, 'action': 'BUY'})
-                s.post('http://localhost:9999/v1/orders', params={'ticker': MARKET1, 'type': 'LIMIT', 'quantity': VOLUME_SUBMIT, 'price':bid_price1, 'action': 'SELL'})
-                now_time = time()
-                remaining_time = 1/BIDS_IN_1 - (now_time-start_time)
-                sleep((remaining_time))
+                # ask_price2 = PRICE_RATIO*lowest_ask2+(1-PRICE_RATIO)*ask_count2
+                # bid_price1 = PRICE_RATIO*highest_bid1+(1-PRICE_RATIO)*bid_count1
+                s.post('http://localhost:9999/v1/orders', params={'ticker': MARKET2, 'type': 'MARKET', 'quantity': VOLUME_SUBMIT, 'action': 'BUY'})
+                s.post('http://localhost:9999/v1/orders', params={'ticker': MARKET1, 'type': 'MARKET', 'quantity': VOLUME_SUBMIT, 'action': 'SELL'})
+                # now_time = time()
+                # remaining_time = 1/BIDS_IN_1 - (now_time-start_time)
+                # sleep((remaining_time))
 
             if bid_count2 > ask_count1:
-                ask_price1 = PRICE_RATIO*lowest_ask1+(1-PRICE_RATIO)*ask_count1
-                bid_price2 = PRICE_RATIO*highest_bid2+(1-PRICE_RATIO)*bid_count2
-                s.post('http://localhost:9999/v1/orders', params={'ticker': MARKET1, 'type': 'LIMIT', 'quantity': VOLUME_SUBMIT, 'price':ask_price1,'action': 'BUY'})
-                s.post('http://localhost:9999/v1/orders', params={'ticker': MARKET2, 'type': 'LIMIT', 'quantity': VOLUME_SUBMIT, 'price':bid_price2,'action': 'SELL'})
-                now_time = time()
-                remaining_time = 1/BIDS_IN_1 - (now_time-start_time)
-                sleep((remaining_time))
+                # ask_price1 = PRICE_RATIO*lowest_ask1+(1-PRICE_RATIO)*ask_count1
+                # bid_price2 = PRICE_RATIO*highest_bid2+(1-PRICE_RATIO)*bid_count2
+                s.post('http://localhost:9999/v1/orders', params={'ticker': MARKET1, 'type': 'MARKET', 'quantity': VOLUME_SUBMIT,'action': 'BUY'})
+                s.post('http://localhost:9999/v1/orders', params={'ticker': MARKET2, 'type': 'MARKET', 'quantity': VOLUME_SUBMIT,'action': 'SELL'})
+                # now_time = time()
+                # remaining_time = 1/BIDS_IN_1 - (now_time-start_time)
+                # sleep((remaining_time))
                 
             # IMPORTANT to update the tick at the end of the loop to check that the algorithm should still run or not
             tick = get_tick(s)
