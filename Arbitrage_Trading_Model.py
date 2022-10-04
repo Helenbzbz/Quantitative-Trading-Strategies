@@ -23,10 +23,10 @@ from time import time
         # We will put the code to sleep after every judgement no matter a bid submitted or not
 
 # GLOBAL VARIABLE
-API_KEY = {'X-API-Key': '837E5K0H'}
+API_KEY = {'X-API-Key': '90P5EPK6'}
 shutdown = False
-VOLUME_COUNT = 7000
-VOLUME_SUBMIT = 5000
+VOLUME_COUNT = 5000
+VOLUME_SUBMIT = 2000
 # Notes, When 10000 & 5000 => 65,281
 # When 20000 & 10000 => 76,026
 # When 18000 & 10000 => 78,091
@@ -34,6 +34,11 @@ VOLUME_SUBMIT = 5000
 # When 14000 & 10000 => 102,163
 # When 7000 & 5000 => 116,241/ 120,581 (Most ideal combination)
 # When 5000 & 1000 => 57,041
+
+# In class, adjust to safer combinatio and submit smaller order sizes
+# With human traders, 5000, 2000 => 70,248.50
+# Another trial: 130,201
+
 PRICE_RATIO = 0.5 # The weight highst bid/lowest ask should take
 BIDS_IN_1 = 2 # We are allowed to submit this number of orders per second
 MARKET1 = 'CRZY_M'
@@ -90,7 +95,7 @@ def main():
         s.headers.update(API_KEY)
         tick = get_tick(s)
 
-        while tick > 5 and tick < 295 and not shutdown:
+        while tick > 0 and tick < 300 and not shutdown:
             
             start_time = time()
             highest_bid1, bid_count1, lowest_ask1, ask_count1 = ticker_bid_ask(s, MARKET1)
