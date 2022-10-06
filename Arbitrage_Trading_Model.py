@@ -26,7 +26,7 @@ from time import time
 API_KEY = {'X-API-Key': '90P5EPK6'}
 shutdown = False
 VOLUME_COUNT = 5000
-VOLUME_SUBMIT = 2000
+VOLUME_SUBMIT = 3000
 # Notes, When 10000 & 5000 => 65,281
 # When 20000 & 10000 => 76,026
 # When 18000 & 10000 => 78,091
@@ -43,6 +43,7 @@ PRICE_RATIO = 0.5 # The weight highst bid/lowest ask should take
 BIDS_IN_1 = 2 # We are allowed to submit this number of orders per second
 MARKET1 = 'CRZY_M'
 MARKET2 = 'CRZY_A'
+SLEEPTIME =0.2
 
 # this class definition allows us to print error messages and stop the program when needed
 class ApiException(Exception):
@@ -108,7 +109,7 @@ def main():
                 s.post('http://localhost:9999/v1/orders', params={'ticker': MARKET1, 'type': 'MARKET', 'quantity': VOLUME_SUBMIT, 'action': 'SELL'})
                 # now_time = time()
                 # remaining_time = 1/BIDS_IN_1 - (now_time-start_time)
-                # sleep((remaining_time))
+                sleep(SLEEPTIME)
 
             if bid_count2 > ask_count1:
                 # ask_price1 = PRICE_RATIO*lowest_ask1+(1-PRICE_RATIO)*ask_count1
@@ -117,7 +118,7 @@ def main():
                 s.post('http://localhost:9999/v1/orders', params={'ticker': MARKET2, 'type': 'MARKET', 'quantity': VOLUME_SUBMIT,'action': 'SELL'})
                 # now_time = time()
                 # remaining_time = 1/BIDS_IN_1 - (now_time-start_time)
-                # sleep((remaining_time))
+                sleep(SLEEPTIME)
                 
             # IMPORTANT to update the tick at the end of the loop to check that the algorithm should still run or not
             tick = get_tick(s)
@@ -126,3 +127,10 @@ if __name__ == '__main__':
     # register the custom signal handler for graceful shutdowns
     signal.signal(signal.SIGINT, signal_handler)
     main()
+    
+    
+# CASE 2: Rebates counts toward majority of profits -> frequency
+    # Market Trend -> need to work with and without trend
+    # Manage inventory risk
+    # Where to place the order and time priority
+    # If get more than 4 orders, cancel the oldest
