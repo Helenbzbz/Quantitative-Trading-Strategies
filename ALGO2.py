@@ -40,14 +40,44 @@ def get_tick(session):
 
 # this helper method returns the bid and ask for a given security
 def ticker_bid_ask(session, ticker):
+    payload = {'ticker': ticker} 
+    resp = session.get('http://localhost:9999/v1/securities/book', params=payload) 
+    if resp.ok: 
+        book = resp.json() 
+    return book
 
 # This function will count each and make sure we have a favorable price => return a quantity => return where buy and sell
 
+#Obtaining orders  
+def orders(session, ticker):
+    payload = {'ticker': ticker}
+    resp = session.get('http://localhost:9999/v1/orders', params = payload)
+    order = resp.json()
+    return order
+
+#Cancelation
+def cancelation(session, ticker,tick):
+    order = orders(session,tick)
+    if order != []:
+        for item in order:
+            time_order = item["tick"]
+            order_id = item['order_id']
+            if tick - 10 > time_order:
+                session.post('http://localhost:9999/v1/commands/cancel/', params = {'order_id':order_id})
+                print(order_id)
 # Price + moving avg
 
 # This function process moving avg -> give True/False + where should we buy or sell
 
 # Position function -> True, unwind, False
+def position(session, ticker):
+    payload = {'ticker': ticker}
+    resp = session.get('http://localhost:9999/v1/securities')
+    if resp.ok:
+        position = resp.json
+    return position
+
+
 
 def main():
     with requests.Session() as s:
@@ -55,12 +85,15 @@ def main():
         tick = get_tick(s)
 
         while tick > 0 and tick < 300 and not shutdown:
-            # get_book
+            ticker_bid_ask(s,"CNR")
+            position(s, "CNR")
+            cancelation(s, "CNR",tick)
             # moving_avg => True, buy
             # count function
             # Position
 
             # IMPORTANT to update the tick at the end of the loop to check that the algorithm should still run or not
+            sleep(1)
             tick = get_tick(s)
 
 if __name__ == '__main__':
