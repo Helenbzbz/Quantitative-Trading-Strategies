@@ -13,14 +13,11 @@ API_KEY = {'X-API-Key': '90P5EPK6'}
 TICKERS = []
 shutdown = False
 POSITION_LIMIT = 0.5
-PRICE_LIST = []
-MOVING_AVG = []
-MOVING_AVG_LIMIT = 0.4
-TRADING_FEES = {}
-VOLUME_PER = 0.7
+TRADING_FEES = {'ALGO':-0.005}
+SPREAD = 0.1
 SLEEP_TIME = 0.3
 NUM_MA = 8
-MA = 10
+MA = 4
 
 # this class definition allows us to print error messages and stop the program when needed
 class ApiException(Exception):
@@ -37,17 +34,21 @@ def market_trend(session, tick, ticker):
     moving_average1 = []
     for i in range (0,NUM_MA):
         moving_average1.append(sum(last_prices[i:i+MA])/MA)
-    print(moving_average1)
-    pre_change = moving_average1[1]-moving_average1[0]
-    for i in range (2,NUM_MA-MA):
-        new_change = moving_average1[i]-moving_average1[i-1]
-        if pre_change >0 and new_change < 0:  return False
-        elif pre_change <0 and new_change > 0:  return False
-        pre_change = new_change
-    if pre_change > 0:
-        return 'Positive'
-    else: return 'Negative'
-            
+    moving_avg_change = []
+    for i in range (1,NUM_MA):
+        change = moving_average1[i]-moving_average1[i-1]
+        moving_avg_change.append(change)
+    print(moving_avg_change)
+    pre = 0
+    for change in moving_avg_change:
+        if pre == 0:
+            pre = change
+        else:
+            if change != 0 and pre/change < 0: return 'False'
+            else:
+                pre = change
+    if pre > 0: return 'Pos'
+    else: return 'neg'
     
 
 # this signal handler allows for a graceful shutdown when CTRL+C is pressed
@@ -70,10 +71,19 @@ def ticker_bid_ask(session, ticker):
     resp = session.get('http://localhost:9999/v1/securities/book', params=payload) 
     if resp.ok: 
         book = resp.json() 
-    return book
+    return book['bids'][0], book['asks'][0]
 
-# This function will count each and make sure we have a favorable price => return a quantity => return where buy and sell
-
+def algo_judgement(session,ticker):
+    bids, asks = ticker_bid_ask(session,ticker)
+    # if bids['price']>asks['price']-SPREAD-2*TRADING_FEES[ticker]:
+    #     # We can add if statement here to filter out non-ANON trader
+    quantity_a = asks['quantity']
+    quantity_b = bids['quantity']
+    best_bid = bids['price']
+    best_ask = asks['price']
+    return [ticker,best_bid,best_ask,min(quantity_a,quantity_b,1000)]
+    return False
+    
 #Obtaining orders  
 def orders(session, ticker):
     payload = {'ticker': ticker}
@@ -83,17 +93,14 @@ def orders(session, ticker):
 
 #Cancelation
 def cancelation(session, ticker,tick):
-    order = orders(session,tick)
+    order = orders(session,ticker)
     if order != []:
         for item in order:
             time_order = item["tick"]
             order_id = item['order_id']
             if tick - 10 > time_order:
-                session.post('http://localhost:9999/v1/commands/cancel/', params = {'order_id':order_id})
-                print(order_id)
-# Price + moving avg
-
-# This function process moving avg -> give True/False + where should we buy or sell
+                session.post('http://localhost:9999/v1/commands/cancel', params = {'order_id':order_id})
+            print(order_id)
 
 # Position function -> True, unwind, False
 def position(session, ticker):
@@ -110,34 +117,25 @@ def main():
         s.headers.update(API_KEY)
         tick = get_tick(s)
 
-        while tick > 0 and tick < 300 and not shutdown:
-            ticker_bid_ask(s,"CNR")
-            position(s, "CNR")
-            cancelation(s, "CNR",tick)
-            trend = market_trend(s,tick,"ALGO")
-            print(tick,trend)
-            if trend == 'Positive': 
-                s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'MARKET', 'quantity': 1000, 'action': 'BUY'})
-                sleep(1)
-                s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'MARKET', 'quantity': 1000, 'action': 'SELL'})
-            elif trend == 'Negative': 
-                s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'MARKET', 'quantity': 1000, 'action': 'SELL'})
-                sleep(1)
-                s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'MARKET', 'quantity': 1000, 'action': 'BUY'})
-            else:
-                sleep(1)
-            
-            # moving_avg => True, buy
-            # count function
-            # Position
-
+        # while tick > 0 and tick < 300 and not shutdown:
+            # trend = market_trend(s,tick,"ALGO")
+            # print(tick,trend)
+            # decision = algo_judgement(s,"ALGO")
+            # if decision:
+            #     quantity = decision[3]
+            #     bid_price = decision[1]
+            #     ask_price = decision[2]
+            #     mid_point = (ask_price+bid_price)/2
+        s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'LIMIT', 'quantity': 100, 'action': 'BUY','price':10})
+        s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'LIMIT', 'quantity': 100, 'action': 'SELL','price':27})
+                
+        cancelation(s,'ALGO',tick)
             # IMPORTANT to update the tick at the end of the loop to check that the algorithm should still run or not
-            sleep(1)
-            tick = get_tick(s)
+            # sleep(0.5)
+            # tick = get_tick(s)
 
 if __name__ == '__main__':
     # register the custom signal handler for graceful shutdowns
     signal.signal(signal.SIGINT, signal_handler)
     main()
-    
-    
+
