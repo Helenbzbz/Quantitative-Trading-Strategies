@@ -42,6 +42,7 @@ def get_tick(session):
 
 # this helper method returns the bid and ask for a given security
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 def ticker_bid_ask(session, ticker):
     payload = {'ticker': ticker} 
     resp = session.get('http://localhost:9999/v1/securities/book', params=payload) 
@@ -77,6 +78,12 @@ def cancelation(session, ticker,tick):
 
 # This function will count each and make sure we have a favorable price => return a quantity => return where buy and sell
 
+=======
+# def ticker_bid_ask(session, ticker):
+
+# This function will count each and make sure we have a favorable price => return a quantity => return where buy and sell
+
+>>>>>>> Stashed changes
 # This function will use the security history function to tell if there is a market trend or not
 def market_trend(session, tick, ticker):
     if tick < MA+NUM_MA: return False
@@ -100,6 +107,9 @@ def market_trend(session, tick, ticker):
     else: return 'Negative'
             
     
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 # Position function -> True, unwind, False
 def position(session, ticker):
@@ -118,6 +128,7 @@ def main():
 
         while tick > 0 and tick < 300 and not shutdown:
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             ticker_bid_ask(s,"CNR")
             position(s, "CNR")
             cancelation(s, "CNR",tick)
@@ -126,6 +137,8 @@ def main():
             # Position
 
 =======
+=======
+>>>>>>> Stashed changes
             trend = market_trend(s,tick,"ALGO")
             print(tick,trend)
             if trend == 'Positive': 
@@ -139,6 +152,9 @@ def main():
             else:
                 sleep(1)
             
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
             # IMPORTANT to update the tick at the end of the loop to check that the algorithm should still run or not
             sleep(1)
