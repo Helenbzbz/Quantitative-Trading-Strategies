@@ -5,8 +5,6 @@ import requests
 from time import sleep
 from time import time
 
-from Arbitrage_Trading_Model import VOLUME_COUNT
-
 # GLOBAL VARIABLE
 API_KEY = {'X-API-Key': '837E5K0H'}
 TICKERS = []
@@ -20,7 +18,7 @@ MAXIMUM_VOLUME = 4000
 TIMETOCANCEL = 7
 SPREAD = 0.05
 SLEEP_TIME = 0.3
-LONGER_MA = 10
+LONGER_MA = 20
 SHORTER_MA = 5
 
 ## VARIABLES FOR POSITION BALANCE
@@ -42,32 +40,6 @@ class ApiException(Exception):
 # Moving average crosses -> 5-MA with 10-MA
 # ANON orders -> More on one side, total quantity; last 5 orders where are they placed
 # Use the normal code as default and add the trend if it's very strong
-def market_trend(session, tick, ticker):
-    if tick < MA+NUM_MA: return False
-    last_prices = []
-    resp1 = session.get('http://localhost:9999/v1/securities/history',params = {"ticker":ticker,"limit":LONGER_MA})
-    resp2 = session.get('http://localhost:9999/v1/securities/history',params = {"ticker":ticker,"limit":SHORTER_MA})
-    prices = resp.json()
-    for price in prices:
-        last_prices.append(price['close'])
-    moving_average1 = []
-    for i in range (0,NUM_MA):
-        moving_average1.append(sum(last_prices[i:i+MA])/MA)
-    moving_avg_change = []
-    for i in range (1,NUM_MA):
-        change = moving_average1[i]-moving_average1[i-1]
-        moving_avg_change.append(change)
-    print(moving_avg_change)
-    pre = 0
-    for change in moving_avg_change:
-        if pre == 0:
-            pre = change
-        else:
-            if change != 0 and pre/change < 0: return 'False'
-            else:
-                pre = change
-    if pre > 0: return 'Pos'
-    else: return 'neg'
 
 # this signal handler allows for a graceful shutdown when CTRL+C is pressed
 def signal_handler(signum, frame):
@@ -147,31 +119,54 @@ def book_balance(session, ticker):
     elif current_position < -LIMIT*PERCENTAGE_TO_LIMIT:
         session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'LIMIT', 'quantity': VOLUME_TO_LIMIT, 'action': 'BUY','price':last_price-SPREAD/2})
 
-# Position function -> True, unwind, False
-def position(session, ticker):
-    payload = {'ticker': ticker}
-    resp = session.get('http://localhost:9999/v1/securities')
-    if resp.ok:
-        position = resp.json
-    return position
+
+def market_trend(session, ticker,tick):
+    if tick < LONGER_MA: return False
+    resp1 = session.get('http://localhost:9999/v1/securities/history',params = {"ticker":ticker,"limit":LONGER_MA})
+    resp2 = session.get('http://localhost:9999/v1/securities/history',params = {"ticker":ticker,"limit":SHORTER_MA})
+    prices1 = resp1.json()
+    prices2 = resp2.json()
+    total_price1 = 0
+    total_price2 = 0
+    for price in prices1:
+        total_price1+= price['close']
+    for price in prices2:
+        total_price2+= price['close']
+    LONGMA = total_price1/LONGER_MA
+    SHORTMA = total_price2/SHORTER_MA
+    if LONGMA > SHORTMA: return 'LONG'
+    elif LONGMA < SHORTMA: return 'SHORT'
+    else: return 'EQUAL'
+
 
 def main():
     with requests.Session() as s:
         s.headers.update(API_KEY)
         tick = get_tick(s)
-
+        pre_market_direction = False
         while tick > 0 and tick < 300 and not shutdown:
-            decision = algo_judgement(s,"ALGO")
-            if decision:
-                quantity = decision[3]
-                ask_price = decision[2]
-                bid_price = decision[1]
-                mid_point = (ask_price+bid_price)/2
-                s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'LIMIT', 'quantity': quantity, 'action': 'BUY','price':mid_point-SPREAD/2})
-                s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'LIMIT', 'quantity': quantity, 'action': 'SELL','price':mid_point+SPREAD/2})
-                sleep(1)
-            cancelation(s,'ALGO',tick)
-            book_balance(s,'ALGO')
+            curr_market_direction = market_trend(s, 'ALGO',tick)
+            print(curr_market_direction, pre_market_direction)
+            if pre_market_direction:
+                if curr_market_direction == 'SHORT' and curr_market_direction != pre_market_direction:
+                    s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'MARKET', 'quantity': 2000, 'action': 'BUY'})
+
+                elif curr_market_direction == 'LONG' and curr_market_direction != pre_market_direction:
+                    s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'MARKET', 'quantity': 2000, 'action': 'SELL'})
+            sleep(0.5)
+            pre_market_direction = curr_market_direction
+
+            # decision = algo_judgement(s,"ALGO")
+            # if decision:
+            #     quantity = decision[3]
+            #     ask_price = decision[2]
+            #     bid_price = decision[1]
+            #     mid_point = (ask_price+bid_price)/2
+            #     s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'LIMIT', 'quantity': quantity, 'action': 'BUY','price':mid_point-SPREAD/2})
+            #     s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'LIMIT', 'quantity': quantity, 'action': 'SELL','price':mid_point+SPREAD/2})
+            #     sleep(1)
+            # cancelation(s,'ALGO',tick)
+            # book_balance(s,'ALGO')
 
             # IMPORTANT to update the tick at the end of the loop to check that the algorithm should still run or not
             tick = get_tick(s)
