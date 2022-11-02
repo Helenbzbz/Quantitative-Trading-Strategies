@@ -12,11 +12,27 @@ API_KEY = {'X-API-Key': '837E5K0H'}
 TICKERS = []
 shutdown = False
 POSITION_LIMIT = 0.5
-TRADING_FEES = {'CNR':-0.005}
-SPREAD = 0.1
+TRADING_FEES = {
+    'CNR':-0.005,
+    'ALGO': -0.005
+}
+MAXIMUM_VOLUME = 4000
+TIMETOCANCEL = 7
+SPREAD = 0.05
 SLEEP_TIME = 0.3
-NUM_MA = 3
-MA = 4
+LONGER_MA = 10
+SHORTER_MA = 5
+
+## VARIABLES FOR POSITION BALANCE
+LIMIT = 25000
+# When the volume approaches 60% of the volume limit, we submit one market order on the opposite side
+PERCENTAGE_TO_MKT = 0.6
+VOLUME_TO_MKT = 3000
+# When the volume approaches 30% of the volume limit, we submit one limit order on the opposite side
+PERCENTAGE_TO_LIMIT = 0.3
+VOLUME_TO_LIMIT = 2000
+
+
 
 # this class definition allows us to print error messages and stop the program when needed
 class ApiException(Exception):
@@ -29,7 +45,8 @@ class ApiException(Exception):
 def market_trend(session, tick, ticker):
     if tick < MA+NUM_MA: return False
     last_prices = []
-    resp = session.get('http://localhost:9999/v1/securities/history',params = {"ticker":ticker,"limit":MA+NUM_MA})
+    resp1 = session.get('http://localhost:9999/v1/securities/history',params = {"ticker":ticker,"limit":LONGER_MA})
+    resp2 = session.get('http://localhost:9999/v1/securities/history',params = {"ticker":ticker,"limit":SHORTER_MA})
     prices = resp.json()
     for price in prices:
         last_prices.append(price['close'])
@@ -82,7 +99,7 @@ def algo_judgement(session,ticker):
         quantity_b = bids['quantity']
         best_bid = bids['price']
         best_ask = asks['price']
-        return [ticker,best_bid,best_ask,min(quantity_a,quantity_b,5000)]
+        return [ticker,best_bid,best_ask,min(quantity_a,quantity_b,MAXIMUM_VOLUME)]
     return False
     
 #Obtaining orders  
@@ -99,9 +116,36 @@ def cancelation(session, ticker,tick):
         for item in order:
             time_order = item["tick"]
             order_id = item['order_id']
-            if tick - 10 > time_order:
-                # session.delete('http://localhost:9999/v1/commands/cancel', params = {'order_id':order_id})
+            if tick - TIMETOCANCEL > time_order:
                 session.delete('http://localhost:9999/v1/orders/{}'.format(order_id))
+
+# Get Position
+def get_position(session, ticker):
+    resp = session.get('http://localhost:9999/v1/securities')
+    positions = resp.json()
+    for position in positions:
+        if position['ticker'] == ticker:
+            return position['position']
+    return False
+
+# Balance Book
+def book_balance(session, ticker):
+    current_position = get_position(session, ticker)
+    print(current_position)
+    resp = session.get('http://localhost:9999/v1/securities/history',params = {"ticker":ticker})
+    prices = resp.json()
+    last_price = prices[0]['close']
+    print(last_price)
+    if current_position > LIMIT*PERCENTAGE_TO_MKT:
+        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'MARKET', 'quantity': VOLUME_TO_LIMIT, 'action': 'SELL'})
+        print('Blanace')
+    elif current_position < -LIMIT*PERCENTAGE_TO_MKT:
+        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'MARKET', 'quantity': VOLUME_TO_LIMIT, 'action': 'BUY'})
+        print('Blanace')
+    elif current_position > LIMIT*PERCENTAGE_TO_LIMIT:
+        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'LIMIT', 'quantity': VOLUME_TO_LIMIT, 'action': 'SELL','price':last_price-SPREAD/2})
+    elif current_position < -LIMIT*PERCENTAGE_TO_LIMIT:
+        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'LIMIT', 'quantity': VOLUME_TO_LIMIT, 'action': 'BUY','price':last_price-SPREAD/2})
 
 # Position function -> True, unwind, False
 def position(session, ticker):
@@ -111,27 +155,25 @@ def position(session, ticker):
         position = resp.json
     return position
 
-
 def main():
     with requests.Session() as s:
         s.headers.update(API_KEY)
         tick = get_tick(s)
 
         while tick > 0 and tick < 300 and not shutdown:
-            # trend = market_trend(s,tick,"ALGO")
-            # print(tick,trend)
-            decision = algo_judgement(s,"CNR")
+            decision = algo_judgement(s,"ALGO")
             if decision:
                 quantity = decision[3]
                 ask_price = decision[2]
                 bid_price = decision[1]
                 mid_point = (ask_price+bid_price)/2
-                s.post('http://localhost:9999/v1/orders', params={'ticker': "CNR", 'type': 'LIMIT', 'quantity': quantity, 'action': 'BUY','price':mid_point-SPREAD/2})
-                s.post('http://localhost:9999/v1/orders', params={'ticker': "CNR", 'type': 'LIMIT', 'quantity': quantity, 'action': 'SELL','price':mid_point+SPREAD/2})
-                
-            cancelation(s,'CNR',tick)
+                s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'LIMIT', 'quantity': quantity, 'action': 'BUY','price':mid_point-SPREAD/2})
+                s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'LIMIT', 'quantity': quantity, 'action': 'SELL','price':mid_point+SPREAD/2})
+                sleep(1)
+            cancelation(s,'ALGO',tick)
+            book_balance(s,'ALGO')
+
             # IMPORTANT to update the tick at the end of the loop to check that the algorithm should still run or not
-            sleep(0.5)
             tick = get_tick(s)
 
 if __name__ == '__main__':
