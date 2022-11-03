@@ -18,8 +18,8 @@ MAXIMUM_VOLUME = 4000
 TIMETOCANCEL = 7
 SPREAD = 0.05
 SLEEP_TIME = 0.3
-LONGER_MA = 20
-SHORTER_MA = 5
+LONGER_MA = 15
+SHORTER_MA = 8
 
 ## VARIABLES FOR POSITION BALANCE
 LIMIT = 25000
@@ -145,15 +145,16 @@ def main():
         tick = get_tick(s)
         pre_market_direction = False
         while tick > 0 and tick < 300 and not shutdown:
-            curr_market_direction = market_trend(s, 'ALGO',tick)
+            curr_market_direction = market_trend(s, 'CNR',tick)
             print(curr_market_direction, pre_market_direction)
             if pre_market_direction:
                 if curr_market_direction == 'SHORT' and curr_market_direction != pre_market_direction:
-                    s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'MARKET', 'quantity': 2000, 'action': 'BUY'})
-
+                    s.post('http://localhost:9999/v1/orders', params={'ticker': "CNR", 'type': 'MARKET', 'quantity': 2000, 'action': 'BUY'})
+                    sleep(5)
                 elif curr_market_direction == 'LONG' and curr_market_direction != pre_market_direction:
-                    s.post('http://localhost:9999/v1/orders', params={'ticker': "ALGO", 'type': 'MARKET', 'quantity': 2000, 'action': 'SELL'})
-            sleep(0.5)
+                    s.post('http://localhost:9999/v1/orders', params={'ticker': "CNR", 'type': 'MARKET', 'quantity': 2000, 'action': 'SELL'})
+                    sleep(5)
+            sleep(1)
             pre_market_direction = curr_market_direction
 
             # decision = algo_judgement(s,"ALGO")
