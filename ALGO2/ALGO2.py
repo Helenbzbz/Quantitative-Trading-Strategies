@@ -6,7 +6,7 @@ from time import sleep
 from time import time
 
 # GLOBAL VARIABLE
-API_KEY = {'X-API-Key': '90P5EPK6'}
+API_KEY = {'X-API-Key': '837E5K0H'}
 TICKERS = []
 shutdown = False
 POSITION_LIMIT = 0.5
