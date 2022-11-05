@@ -16,20 +16,20 @@ TRADING_FEES = {
     'AC':-0.005
 }
 # RY is more liquid and give up the other markets
-MAXIMUM_VOLUME = 3000 # ALGO2: 3000
+MAXIMUM_VOLUME = 2000
 TIMETOCANCEL = 7 # It was 5 for ALGO2e
 SPREAD = 0.05
-SLEEP_TIME = 0.5
+SLEEP_TIME = 0.3
 LONGER_MA = 15
 SHORTER_MA = 8
 
 ## VARIABLES FOR POSITION BALANCE
-LIMIT = 25000 # ALGO2: 25000
+LIMIT = 25000
 # When the volume approaches 60% of the volume limit, we submit one market order on the opposite side
-PERCENTAGE_TO_MKT = 0.4
-VOLUME_TO_MKT = 5000
+PERCENTAGE_TO_MKT = 0.7
+VOLUME_TO_MKT = 3000
 # When the volume approaches 30% of the volume limit, we submit one limit order on the opposite side
-PERCENTAGE_TO_LIMIT = 0.2
+PERCENTAGE_TO_LIMIT = 0.6
 VOLUME_TO_LIMIT = 2000
 
 
@@ -112,16 +112,19 @@ def book_balance(session, ticker):
     last_price = prices[0]['close']
     print(last_price)
     if current_position > LIMIT*PERCENTAGE_TO_MKT:
-        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'MARKET', 'quantity': VOLUME_TO_LIMIT, 'action': 'SELL'})
+        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'MARKET', 
+        'quantity': VOLUME_TO_MKT, 'action': 'SELL'})
         print('Blanace')
     if current_position < -LIMIT*PERCENTAGE_TO_MKT:
-        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'MARKET', 'quantity': VOLUME_TO_LIMIT, 'action': 'BUY'})
+        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'MARKET', 
+        'quantity': VOLUME_TO_MKT, 'action': 'BUY'})
         print('Blanace')
     if current_position > LIMIT*PERCENTAGE_TO_LIMIT:
-        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'LIMIT', 'quantity': VOLUME_TO_LIMIT, 'action': 'SELL','price':last_price-SPREAD/2})
+        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'MARKET', 
+        'quantity': VOLUME_TO_LIMIT, 'action': 'SELL'})
     if current_position < -LIMIT*PERCENTAGE_TO_LIMIT:
-        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'LIMIT', 'quantity': VOLUME_TO_LIMIT, 'action': 'BUY','price':last_price-SPREAD/2})
-    # sesssion.post('http://localhost:9999/v1/commands/cancel?all=1')
+        session.post('http://localhost:9999/v1/orders', params={'ticker': {ticker}, 'type': 'MARKET', 
+        'quantity': VOLUME_TO_LIMIT, 'action': 'BUY'})
 
 def market_trend(session,ticker,tick):
     if tick < LONGER_MA: return False
@@ -149,15 +152,15 @@ def trading_function_ALGO(ticker):
         positive_spread = 0
         negative_spread = 0
         while tick > 0 and tick < 300 and not shutdown:
-            curr_market_direction = market_trend(s, ticker,tick)
-            if pre_market_direction:
-                if curr_market_direction == 'SHORT':
-                    positive_spread = 0.02
-                    print(positive_spread)
-                elif curr_market_direction == 'LONG':
-                    negative_spread = -0.02
-                    print(negative_spread)
-            pre_market_direction = curr_market_direction
+            # curr_market_direction = market_trend(s, ticker,tick)
+            # if pre_market_direction:
+            #     if curr_market_direction == 'SHORT':
+            #         positive_spread = 0.02
+            #         print(positive_spread)
+            #     elif curr_market_direction == 'LONG':
+            #         negative_spread = -0.02
+            #         print(negative_spread)
+            # pre_market_direction = curr_market_direction
 
             decision = algo_judgement(s,ticker)
             if decision:
@@ -171,6 +174,7 @@ def trading_function_ALGO(ticker):
             sleep(SLEEP_TIME)
             tick = get_tick(s)
             cancelation(s,ticker,tick)
+            book_balance(s,ticker)
             book_balance(s,ticker)
 
             # IMPORTANT to update the tick at the end of the loop to check that the algorithm should still run or not
