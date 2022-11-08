@@ -16,8 +16,8 @@ TRADING_FEES = {
     'AC':-0.005
 }
 # RY is more liquid and give up the other markets
-MAXIMUM_VOLUME = 3000
-TIMETOCANCEL = 5 # It was 5 for ALGO2e
+MAXIMUM_VOLUME = 1000
+TIMETOCANCEL = 10 # It was 5 for ALGO2e
 SPREAD = 0.05
 SLEEP_TIME = 0.3
 LONGER_MA = 15
@@ -26,10 +26,10 @@ SHORTER_MA = 8
 ## VARIABLES FOR POSITION BALANCE
 LIMIT = 25000
 # When the volume approaches 60% of the volume limit, we submit one market order on the opposite side
-PERCENTAGE_TO_MKT = 0.6
+PERCENTAGE_TO_MKT = 0.7
 VOLUME_TO_MKT = 3000
 # When the volume approaches 30% of the volume limit, we submit one limit order on the opposite side
-PERCENTAGE_TO_LIMIT = 0.3
+PERCENTAGE_TO_LIMIT = 0.6
 VOLUME_TO_LIMIT = 2000
 
 
@@ -175,14 +175,13 @@ def trading_function_ALGO(ticker):
             tick = get_tick(s)
             cancelation(s,ticker,tick)
             book_balance(s,ticker)
-            book_balance(s,ticker)
 
             # IMPORTANT to update the tick at the end of the loop to check that the algorithm should still run or not
             tick = get_tick(s)
 
 
 def main():
-    trading_function_ALGO('AC')
+    trading_function_ALGO('ALGO')
 
 if __name__ == '__main__':
     # register the custom signal handler for graceful shutdowns
