@@ -42,11 +42,10 @@ def main():
             tick = get_tick(s)
             newsj = s.get('http://localhost:9999/v1/news').json()
             price = s.get('http://localhost:9999/v1/securities/history',params = {"ticker":"CL"}).json()
-            record = open("/Commodity/info.txt", "a")
+            record = open("Commodity/info.txt", "a")
             record.write(f'{tick}, {newsj[0]["headline"]}-{newsj[0]["body"]}, {price[0]["close"]} \n')
             sleep(1.5)
-        
-
+    
 if __name__ == '__main__':
     # register the custom signal handler for graceful shutdowns
     signal.signal(signal.SIGINT, signal_handler)
