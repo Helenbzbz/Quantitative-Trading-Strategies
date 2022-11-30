@@ -6,7 +6,7 @@ from time import sleep
 from time import time
 
 # GLOBAL VARIABLE
-API_KEY = {'X-API-Key': '90P5EPK6'}
+API_KEY = {'X-API-Key': '837E5K0H'}
 shutdown = False
 
 # Definition for the future contract section
@@ -42,9 +42,9 @@ def main():
             tick = get_tick(s)
             newsj = s.get('http://localhost:9999/v1/news').json()
             price = s.get('http://localhost:9999/v1/securities/history',params = {"ticker":"CL"}).json()
-            record = open("info.txt", "a")
+            record = open("/Commodity/info.txt", "a")
             record.write(f'{tick}, {newsj[0]["headline"]}-{newsj[0]["body"]}, {price[0]["close"]} \n')
-            sleep(3)
+            sleep(1.5)
         
 
 if __name__ == '__main__':
