@@ -9,12 +9,6 @@ from time import time
 API_KEY = {'X-API-Key': '837E5K0H'}
 shutdown = False
 
-# Definition for the future contract section
-FUTURE_THRESHOLD_ONE = 0.3
-FUTURE_THRESHOLD_TWO = 0.6
-FUTURE_THRESHOLD_THREE = 1.0
-TOTAL_ALLOWANCE = 200
-
 # this class definition allows us to print error messages and stop the program when needed
 class ApiException(Exception):
     pass
@@ -42,7 +36,7 @@ def main():
             tick = get_tick(s)
             newsj = s.get('http://localhost:9999/v1/news').json()
             price = s.get('http://localhost:9999/v1/securities/history',params = {"ticker":"CL"}).json()
-            record = open("Commodity/info.txt", "a")
+            record = open("Commodity/info2.txt", "a")
             record.write(f'{tick}, {newsj[0]["headline"]}-{newsj[0]["body"]}, {price[0]["close"]} \n')
             sleep(1.5)
     
