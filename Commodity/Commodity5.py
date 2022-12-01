@@ -18,13 +18,16 @@ PRICE_THRESHOLD_TO_REACT = 0.4
 PERCENTAGE_TO_EXIT = 0.7 
 
 # Definition for the fundamental news trade
-VOLUME_TRADE_FOR_NEWS = 200
-TICK_TO_KEEP_NEWS = 15
+VOLUME_TRADE_FOR_NEWS = 100
+TICK_TO_KEEP_NEWS = 8
 TICKER_FOR_NEWS = "CL-2F"
 
 # Definition for the Transportation section
-UNIT_TRADE_FOR_TRANS = 15
-THRESHOLD_TO_TRADE = 14000
+UNIT_TRADE_FOR_TRANS = 7
+THRESHOLD_TO_TRADE = 5000
+
+# Definition for the Refinery
+THRESHOLD_TO_REFINE = 30000
 
 # this class definition allows us to print error messages and stop the program when needed
 class ApiException(Exception):
@@ -65,7 +68,7 @@ def fundamental_news(session, tick):
     
     ## Here, we start to categorize the news into 3 categories: Fundamental News, Pipeline News, and Soft News.abs
     # For this fundamental news, we want to ensure it's stil time effective. Once detect its profit, we will return the profit
-    if news_title[0] == "WEEK": 
+    if news_title[0] == "WEEK" and tick-tick_published<tick: 
         actual_direction = 1
         estimate_direction = 1
         if news_title[4] == "DRAW": actual_direction = -1
@@ -77,11 +80,10 @@ def fundamental_news(session, tick):
         return profit
     return 0
 
-
 ## This section is responsible for fundamental news execute
 def fundamental_news_execute(session, profit):
     if profit != 0:
-        if profit >0 : 
+        if profit >0 :
             direction_first, direction_second = "BUY","SELL"
         elif profit <0: 
             direction_first, direction_second = "SELL", "BUY"
@@ -121,7 +123,6 @@ def future_contract(session):
     New_formula_result = CL2_price_new-CL1_price_new-1
     Old_formula_result = CL2_price_old-CL1_price_old-1
     Price_Change = New_formula_result-Old_formula_result
-
     
     return Price_Change
 
@@ -170,9 +171,11 @@ def refinary(session):
    
 def refinary_execute(session):
     # Lease the storage
-    session.post('http://localhost:9999/v1/leases', params={'ticker': "CL-STORAGE"})
-    session.post('http://localhost:9999/v1/leases', params={'ticker': "CL-STORAGE"})
-    session.post('http://localhost:9999/v1/leases', params={'ticker': "CL-STORAGE"})
+    store1 = session.post('http://localhost:9999/v1/leases', params={'ticker': "CL-STORAGE"}).json()
+    store2 = session.post('http://localhost:9999/v1/leases', params={'ticker': "CL-STORAGE"}).json()
+    store3 = session.post('http://localhost:9999/v1/leases', params={'ticker': "CL-STORAGE"}).json()
+    store_list = [store1['id'],store2['id'],store3['id']]
+    print(store_list)
 
     # # Buy the CL
     session.post('http://localhost:9999/v1/orders', params={'ticker': "CL", 'type': 'MARKET', 'quantity': 30, 'action': "BUY"})
@@ -181,9 +184,12 @@ def refinary_execute(session):
 
     # # Lease & Use the Refinery
     session.post('http://localhost:9999/v1/leases', params={'ticker': "CL-REFINERY"})
+    sleep(1)
     leased_assets = session.get('http://localhost:9999/v1/leases').json()
     for asset in leased_assets:
-        if asset['ticker'] == "CL-REFINERY": refinary_id = asset['id']
+        if asset['ticker'] == "CL-REFINERY": 
+            refinary_id = asset['id']
+            print(refinary_id)
     session.post('http://localhost:9999/v1/leases/{}'.format(refinary_id), params={'from1': 'CL', 'quantity1': 30})
     sleep(1) # To make sure the server is up to date
 
@@ -194,10 +200,9 @@ def refinary_execute(session):
         for asset in leased_assets:
             if asset['ticker'] == 'CL-REFINERY' and asset['convert_finish_period'] != []:
                 refinary_in_use = 1
-
-            
+  
     for asset in leased_assets:
-        if asset['ticker'] == 'CL-STORAGE' and asset['containment_usage'] == 0:
+        if asset['ticker'] == 'CL-STORAGE' and asset['containment_usage'] == 0  and asset['id'] in store_list:
             asset_id = asset['id']
             resp = session.delete(f'http://localhost:9999/v1/leases/{asset_id}')
 
@@ -213,7 +218,7 @@ def refinary_execute(session):
     session.post('http://localhost:9999/v1/orders', params={'ticker': "CL-2F", 'type': 'MARKET', 'quantity': 30, 'action': "BUY"})
     session.post('http://localhost:9999/v1/orders', params={'ticker': "HO", 'type': 'MARKET', 'quantity': 10, 'action': "SELL"})
     session.post('http://localhost:9999/v1/orders', params={'ticker': "RB", 'type': 'MARKET', 'quantity': 20, 'action': "SELL"})
-
+    session.delete(f'http://localhost:9999/v1/leases/{refinary_id}')
 
 ## This section will work on the transportation
 def transportation(session):
@@ -231,22 +236,44 @@ def transportation(session):
 
     return estimated_profit_AK,estimated_profit_NYC
 
-def transportation_exacute(session, pipeline_tick, storage1, storage2, ticker1, ticker2):
-    # We only lease one storage and that will be enough :)
-    session.post('http://localhost:9999/v1/leases', params={'ticker': storage1})
-    session.post('http://localhost:9999/v1/orders', params={'ticker': ticker1, 'type': 'MARKET', 'quantity': 10, 'action': "BUY"})
-    session.post('http://localhost:9999/v1/leases', params={'ticker': pipeline_tick})
-     
+def transportation_exacute(session, pipeline_tick, storage1, storage2, ticker1, ticker2, hedge1, hedge2):
+    #We only lease one storage and that will be enough :)
+    resp = session.post('http://localhost:9999/v1/leases', params={'ticker': storage1}).json()
+    trans_storage_id = resp['id']
+    for i in range (0, UNIT_TRADE_FOR_TRANS):
+        session.post('http://localhost:9999/v1/orders', params={'ticker': ticker1, 'type': 'MARKET', 'quantity': 10, 'action': "BUY"})
+        session.post('http://localhost:9999/v1/leases', params={'ticker': pipeline_tick, 'from1': ticker1, 'quantity1': 10})
+        session.post('http://localhost:9999/v1/orders', params={'ticker': "CL-2F", 'type': 'MARKET', 'quantity': 10, 'action': hedge1})
+        sleep(0.5)
+    resp = session.delete(f'http://localhost:9999/v1/leases/{trans_storage_id}')
+
+    sleep(12)
+    storage_id = []
+    for i in range (0, UNIT_TRADE_FOR_TRANS):  
+        resp = session.post('http://localhost:9999/v1/leases', params={'ticker': storage2}).json()
+        trans_storage_id = resp['id']
+        storage_id.append(trans_storage_id)
+
+    current_arrived = 0
+    while current_arrived < UNIT_TRADE_FOR_TRANS:
+        for store_id in storage_id:
+            storage_status = session.get('http://localhost:9999/v1/leases',params = {'id':trans_storage_id}).json()
+            if storage_status[0]['containment_usage'] != 0 and storage_status[0]['containment_usage'] != None:
+                session.post('http://localhost:9999/v1/orders', params={'ticker': ticker2, 'type': 'MARKET', 'quantity': 10, 'action': "SELL"})
+                session.post('http://localhost:9999/v1/orders', params={'ticker': "CL-2F", 'type': 'MARKET', 'quantity': 10, 'action': hedge2})
+                current_arrived += 1
+    for store_id in storage_id:
+        resp = session.delete(f'http://localhost:9999/v1/leases/{store_id}')
+
 
 def main():
     with requests.Session() as s:
         s.headers.update(API_KEY)
         tick = get_tick(s)
         
-        while tick > 0 and tick < 600 and not shutdown:
+        while tick > 0 and tick < 550 and not shutdown:
             tick = get_tick(s)
             
-
             # profit = fundamental_news(s, tick)
             # fundamental_news_execute(s, profit)
             
@@ -255,15 +282,19 @@ def main():
             # if abs(profit) > PRICE_THRESHOLD_TO_REACT:
             #     future_contract_execute(s, profit, tick)
             
-            # profit = refinary(s)
-            # print(profit)
-            # sleep(1)
-            # if profit > 40000:
-            #     refinary_execute(s)
+            profit = refinary(s)
+            print(profit)
+            if profit > THRESHOLD_TO_REFINE:
+                refinary_execute(s)
 
             AK_profit, NY_profit = transportation(s)
-            transportation_exacute(s, "AK-CS-PIPE", "AK-STORAGE", "CL-STORAGE", "CL-AK", "CL")
-
+            print(AK_profit,NY_profit)
+            if AK_profit > THRESHOLD_TO_TRADE:
+                transportation_exacute(s, "AK-CS-PIPE", "AK-STORAGE", "CL-STORAGE", "CL-AK", "CL", "SELL","BUY")
+            AK_profit, NY_profit = transportation(s)
+            if NY_profit > THRESHOLD_TO_TRADE:
+                transportation_exacute(s, "CS-NYC-PIPE", "CL-STORAGE", "NYC-STORAGE", "CL", "CL-NYC", "BUY","SELL")
+            sleep(1)
         
 if __name__ == '__main__':
     # register the custom signal handler for graceful shutdowns
