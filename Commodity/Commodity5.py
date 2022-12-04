@@ -1,5 +1,4 @@
 # Hello this is Community 5
-
 import signal
 import requests
 from time import sleep
@@ -24,7 +23,7 @@ TICKER_FOR_NEWS = "CL-2F"
 
 # Definition for the Transportation section
 UNIT_TRADE_FOR_TRANS = 7
-THRESHOLD_TO_TRADE = 5000
+THRESHOLD_TO_TRADE = 11000
 
 # Definition for the Refinery
 THRESHOLD_TO_REFINE = 30000
@@ -47,7 +46,6 @@ def get_tick(session):
         return case['tick']
     raise ApiException('The API key provided in this Python code must match that in the RIT client (please refer to the API hyperlink in the client toolbar and/or the RIT – User Guide – REST API Documentation.pdf)')
 
-
 ## These are two very fundamental helper to get the price or cost of commodities or equipments
 def get_asset_cost(session,ticker):
     asset = session.get('http://localhost:9999/v1/assets',params = {"ticker":ticker}).json()
@@ -58,35 +56,34 @@ def get_latest_price(session,ticker):
     return product[0]['close']
 
 
-## This section contains fundamental news profit estimation, pipeline news avoidance, and soft news alert
-## This function is all good and tested
+## Section 1. News. This section contains fundamental news profit estimation
+# The function will split the news into letter and find the letters representing direction and volumes
+# This function will only pricess the news when it's published within certain ticks
 def fundamental_news(session, tick):
     newsj = session.get('http://localhost:9999/v1/news').json()
     most_recent_news = newsj[0]
     news_title = most_recent_news["headline"].split(' ')
     tick_published = most_recent_news["tick"]
     
-    ## Here, we start to categorize the news into 3 categories: Fundamental News, Pipeline News, and Soft News.abs
-    # For this fundamental news, we want to ensure it's stil time effective. Once detect its profit, we will return the profit
-    if news_title[0] == "WEEK" and tick-tick_published<tick: 
+    if news_title[0] == "WEEK" and tick-tick_published < TICK_TO_KEEP_NEWS: 
         actual_direction = 1
         estimate_direction = 1
         if news_title[4] == "DRAW": actual_direction = -1
         if news_title[10] == "DRAW": estimate_direction = -1
         total_surprise_volume = float(news_title[5])*actual_direction - float(news_title[11])*estimate_direction
         price_change = total_surprise_volume*-0.1
-        # We proportionate the profit to take consideration on how much time have passed
+        # We proportionate the profit to take consideration on how much volume we can trade
         profit = VOLUME_TRADE_FOR_NEWS*price_change*1000
         return profit
     return 0
 
-## This section is responsible for fundamental news execute
+# This section is responsible for fundamental news execute
+# The logic is, when the profit of the news is positive, we trade on CL-2F and submit multiple orders until reach the set volume to trade
+# Based on the analysis, the news will have its results in around 8 ticks, therefore, the algo wait for 8 ticks and get out of the position
 def fundamental_news_execute(session, profit):
     if profit != 0:
-        if profit >0 :
-            direction_first, direction_second = "BUY","SELL"
-        elif profit <0: 
-            direction_first, direction_second = "SELL", "BUY"
+        if profit >0 : direction_first, direction_second = "BUY","SELL"
+        elif profit <0: direction_first, direction_second = "SELL", "BUY"
 
         volume_to_submit = VOLUME_TRADE_FOR_NEWS
         while volume_to_submit > 30:
@@ -103,7 +100,10 @@ def fundamental_news_execute(session, profit):
         session.post('http://localhost:9999/v1/orders', params={'ticker': TICKER_FOR_NEWS, 'type': 'MARKET', 'quantity': volume_to_submit, 'action': direction_second})
 
 
-## This section estimate the profit from future arbitrage => This is the Moving average of CL2-CL1-1's change
+## Section 2. Future. This section estimate the profit from future arbitrage
+# The value is measured as CL-2F - CL-1F - 1
+# We measure the value change within certain tick: Value_change at tick n = P(n) - P(n-t)
+# This function will then return the profitability estimation
 def future_contract(session):
     CL1 = session.get('http://localhost:9999/v1/securities/history',params = {"ticker":"CL-1F"}).json()
     if CL1 == []:
@@ -124,11 +124,13 @@ def future_contract(session):
     Old_formula_result = CL2_price_old-CL1_price_old-1
     Price_Change = New_formula_result-Old_formula_result
     
-    return Price_Change
+    return Price_Change, Price_Change*VOLUME_TRADE_FOR_FUTURE*0.7
 
 # This section act on the future arbitrage opportunity
-def future_contract_execute(session, profit, tick):
-    if profit > 0:
+# If the the profit/change is in positive direction, means there will be a negative change following, therefore we sell CL-2F and buy CL-1F, vice versa
+# When this transaction happens, we keep the purchase until: 1. certain tick 2. certain percentage move
+def future_contract_execute(session, price, tick):
+    if price > 0:
         ticker_sell = "CL-2F"
         ticker_buy = "CL-1F"
     else:
@@ -144,10 +146,10 @@ def future_contract_execute(session, profit, tick):
     session.post('http://localhost:9999/v1/orders', params={'ticker': ticker_sell, 'type': 'MARKET', 'quantity': volume_to_submit, 'action': "SELL"})
     
     current_tick = get_tick(session)
-    new_profit = future_contract(session)
-    while current_tick - tick > TICK_TO_KEEP_FUTURE or abs(new_profit) > abs(profit*PERCENTAGE_TO_EXIT):
+    new_price, new_profit = future_contract(session)
+    while current_tick - tick > TICK_TO_KEEP_FUTURE or abs(new_price) > abs(price*PERCENTAGE_TO_EXIT):
         current_tick = get_tick(session)
-        new_profit = future_contract(session)
+        new_price, new_profit = future_contract(session)
 
     volume_to_submit = VOLUME_TRADE_FOR_FUTURE
     while volume_to_submit > 30:
@@ -158,7 +160,8 @@ def future_contract_execute(session, profit, tick):
     session.post('http://localhost:9999/v1/orders', params={'ticker': ticker_sell, 'type': 'MARKET', 'quantity': volume_to_submit, 'action': "BUY"})
 
 
-## This section looks at the profitability of refinary
+## Section 3. Refinery. This section looks at the profitability of refinary
+# We estimate the refinery profit based on the formula
 def refinary(session):
     CL_price = get_latest_price(session, "CL")
     Refinary_cost = get_asset_cost(session, "CL-REFINERY")
@@ -169,13 +172,17 @@ def refinary(session):
     estimated_profit = 10*42000*HO_price + 20*RB_price*42000 - Refinary_cost - 30*CL_price*1000 - 3*Storage_cost
     return estimated_profit
    
+# This section execute the refinery function, we first lease the refineary and record its id
+# Then we buy the CL, and hedge the position by CL-2F
+# Lease and use the refinery, record the id, and give the program one tick to update
+# If we detect the refinery is in use, we can cancel the storage
+# We then kept checking when the oil is out the refinery, we sell the HO and RB and buy back the hedged position, and cancel the refinery lease
 def refinary_execute(session):
     # Lease the storage
     store1 = session.post('http://localhost:9999/v1/leases', params={'ticker': "CL-STORAGE"}).json()
     store2 = session.post('http://localhost:9999/v1/leases', params={'ticker': "CL-STORAGE"}).json()
     store3 = session.post('http://localhost:9999/v1/leases', params={'ticker': "CL-STORAGE"}).json()
     store_list = [store1['id'],store2['id'],store3['id']]
-    print(store_list)
 
     # # Buy the CL
     session.post('http://localhost:9999/v1/orders', params={'ticker': "CL", 'type': 'MARKET', 'quantity': 30, 'action': "BUY"})
@@ -207,7 +214,6 @@ def refinary_execute(session):
             resp = session.delete(f'http://localhost:9999/v1/leases/{asset_id}')
 
     # We start to check if the refineary is finished. As soon as it is, we will buy the future, sell HO and RB
-    # We can leave the asset here for a bit and come back to revist when we have the next investment decision available
     while refinary_in_use == 1:
         leased_assets = session.get('http://localhost:9999/v1/leases').json()
         print(refinary_in_use)
@@ -220,7 +226,8 @@ def refinary_execute(session):
     session.post('http://localhost:9999/v1/orders', params={'ticker': "RB", 'type': 'MARKET', 'quantity': 20, 'action': "SELL"})
     session.delete(f'http://localhost:9999/v1/leases/{refinary_id}')
 
-## This section will work on the transportation
+## Section 4. Transportation. This section will work on the transportation
+# This function estmate the AK-CL pipeline and CL-NY pipeline profits
 def transportation(session):
     AK_pipeline_cost = get_asset_cost(session, "AK-CS-PIPE")
     NY_pipeline_cost = get_asset_cost(session, "CS-NYC-PIPE")
@@ -231,11 +238,15 @@ def transportation(session):
 
     AK_Pipeline_Profit = (CL_price-AK_price)*10*1000-AK_pipeline_cost-6*150
     NYC_Pipeline_Profit = (NYC_price-CL_price)*10*1000-NY_pipeline_cost-6*150
-    estimated_profit_AK = AK_Pipeline_Profit*3
-    estimated_profit_NYC = NYC_Pipeline_Profit*3
+    estimated_profit_AK = AK_Pipeline_Profit*UNIT_TRADE_FOR_TRANS
+    estimated_profit_NYC = NYC_Pipeline_Profit*UNIT_TRADE_FOR_TRANS
 
     return estimated_profit_AK,estimated_profit_NYC
 
+# This section execute the transportation
+# We rent one storage for the source oil and lease pipeline once 0.5 tick until reached the unit we want
+# Then the program sleep for 12 ticks and then lease enough storage at the destination storages.
+# We constantly screen these storages and as soon as it's full, we sell it and cancel this particular lease
 def transportation_exacute(session, pipeline_tick, storage1, storage2, ticker1, ticker2, hedge1, hedge2):
     #We only lease one storage and that will be enough :)
     resp = session.post('http://localhost:9999/v1/leases', params={'ticker': storage1}).json()
@@ -274,26 +285,32 @@ def main():
         while tick > 0 and tick < 550 and not shutdown:
             tick = get_tick(s)
             
-            # profit = fundamental_news(s, tick)
+            ## This section is responsible for news
+            ## I decided to not run this section but manually consider news impact
+            profit = fundamental_news(s, tick)
+            print(profit)
             # fundamental_news_execute(s, profit)
             
-            # profit = future_contract(s)
-            # print(profit)
-            # if abs(profit) > PRICE_THRESHOLD_TO_REACT:
-            #     future_contract_execute(s, profit, tick)
+            ## This section is responsible for future contracts
+            ## However, since it impacts the positition too much so it doesn't work well with other parts
+            ## Therefore, I removed this section for my eval
+            # price, profit = future_contract(s)
+            # print(price)
+            # if abs(price) > THRESHOLD_TO_TRADE:
+            #     future_contract_execute(s, price, tick)
             
+            ## This section is responsible for refinery
             profit = refinary(s)
             print(profit)
-            if profit > THRESHOLD_TO_REFINE:
-                refinary_execute(s)
+            if profit > THRESHOLD_TO_REFINE: refinary_execute(s)
 
+            ## This section is responsible for transportation
             AK_profit, NY_profit = transportation(s)
             print(AK_profit,NY_profit)
-            if AK_profit > THRESHOLD_TO_TRADE:
-                transportation_exacute(s, "AK-CS-PIPE", "AK-STORAGE", "CL-STORAGE", "CL-AK", "CL", "SELL","BUY")
+            if AK_profit > THRESHOLD_TO_TRADE and AK_profit > NY_profit: transportation_exacute(s, "AK-CS-PIPE", "AK-STORAGE", "CL-STORAGE", "CL-AK", "CL", "BUY","SELL")
             AK_profit, NY_profit = transportation(s)
-            if NY_profit > THRESHOLD_TO_TRADE:
-                transportation_exacute(s, "CS-NYC-PIPE", "CL-STORAGE", "NYC-STORAGE", "CL", "CL-NYC", "BUY","SELL")
+            if NY_profit > THRESHOLD_TO_TRADE and NY_profit > AK_profit: transportation_exacute(s, "CS-NYC-PIPE", "CL-STORAGE", "NYC-STORAGE", "CL", "CL-NYC", "SELL","BUY")
+            
             sleep(1)
         
 if __name__ == '__main__':
